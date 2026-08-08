@@ -266,6 +266,10 @@
     30%{box-shadow:0 0 26px 6px var(--tier-color);}
     100%{box-shadow:0 0 14px 2px var(--tier-color);}
   }
+  @keyframes idleScroll{
+    from{transform:translateX(0);}
+    to{transform:translateX(var(--idle-distance, -800px));}
+  }
 
   .empty-reel{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -325,7 +329,7 @@
   .entries-grid{
     display:flex;flex-wrap:wrap;gap:8px;max-height:280px;overflow-y:auto;padding-right:4px;
   }
-  .entries-grid:empty:after{content:"No entries yet — connect to chat and wait for your keyword, or add test entries below.";color:var(--text-dim);font-size:12.5px;}
+  .entries-grid:empty:after{content:"No entries yet — connect to chat and wait for your keyword.";color:var(--text-dim);font-size:12.5px;}
   .chip{
     display:flex;align-items:center;gap:7px;padding:6px 10px 6px 6px;border-radius:999px;
     background:var(--panel-3);border:1px solid var(--tier-color, var(--line));cursor:pointer;
@@ -340,9 +344,6 @@
   .legend span{display:flex;align-items:center;gap:5px;}
   .legend .swatch{width:8px;height:8px;}
 
-  .demo-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
-  .demo-row input{flex:1;min-width:140px;}
-
   /* history */
   .history-list{display:flex;gap:8px;flex-wrap:wrap;}
   .hist-chip{
@@ -355,7 +356,7 @@
   footer{text-align:center;color:#4b5266;font-size:11px;padding:0 20px 30px;font-family:'Space Mono',monospace;letter-spacing:1px;}
 
   @media (prefers-reduced-motion: reduce){
-    .reel-track{transition:none !important;}
+    .reel-track{transition:none !important;animation:none !important;}
     .confetti{display:none;}
     .winner-overlay.show, .winner-panel{animation:none;}
   }
@@ -466,17 +467,7 @@
     <div class="msg">Mod, VIP, and sub-tier luck don't stack — only the single highest bonus someone qualifies for applies. Follower luck is a base multiplier applied to everyone, on top of which that one bonus is added.</div>
   </div>
 
-  <!-- 5. TEST TOOLS -->
-  <div class="panel">
-    <h2><span class="bar"></span>Test tools</h2>
-    <button class="btn btn-ghost btn-block" id="simulateBtn">Add 15 test entries</button>
-    <div class="demo-row">
-      <input type="text" id="manualInput" placeholder="Add a name manually">
-      <button class="btn btn-ghost btn-sm" id="addManualBtn">Add</button>
-    </div>
-  </div>
-
-  <!-- 6. TWITCH CONNECTION — very bottom -->
+  <!-- 5. TWITCH CONNECTION — very bottom -->
   <div class="panel">
     <h2><span class="bar"></span>Connect to chat</h2>
     <label class="field" for="channelInput">Twitch channel <span style="color:#525a70">(your Twitch username, no # needed)</span></label>
@@ -493,8 +484,7 @@
     <div class="msg" id="avatarMsg"></div>
     <details class="help">
       <summary>Won't connect — what to check</summary>
-      <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.<br><br>
-      Either way, the <b style="color:var(--text);">Manual chat feed</b> panel further down works with zero connection at all.</p>
+      <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.</p>
     </details>
 
     <details class="help">
@@ -503,14 +493,6 @@
     </details>
   </div>
 
-  <!-- MANUAL FALLBACK — use if live chat won't connect -->
-  <div class="panel">
-    <h2><span class="bar"></span>Manual chat feed <span style="color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0;">— use if live chat won't connect</span></h2>
-    <div class="msg" style="margin-top:0;">If the Connect button above won't link (common when a page is blocked from reaching outside scripts, or you're testing before going live), paste raw chat lines here instead. One line per message, formatted <b style="color:var(--text);">username: message</b>. Anyone whose line contains your keyword gets added, just like live chat would.</div>
-    <textarea id="manualChatArea" rows="5" placeholder="southyy_fan: !enter&#10;chatuser22: hey everyone !enter good luck" style="width:100%;background:var(--panel-3);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;font-family:'Space Mono',monospace;font-size:12.5px;resize:vertical;margin-top:10px;"></textarea>
-    <button class="btn btn-ghost btn-block" id="processChatBtn" style="margin-top:10px;">Process pasted chat</button>
-    <div class="msg" id="manualChatMsg"></div>
-  </div>
 
 </div>
 <!-- /.layout -->
@@ -551,7 +533,7 @@
   </div>
 </div>
 
-<footer>SOUTHYY GIVEAWAYS — runs entirely in this browser tab. Refreshing the page clears current entries; your connection settings and winner history are saved.</footer>
+<footer>SOUTHYY GIVEAWAYS — runs entirely in this browser tab. Refreshing the page clears current entries; your connection settings, luck console, and winner history are saved.</footer>
 
 <script>
 (function(){
@@ -565,6 +547,7 @@
   let chatLineCount = 0;
   let winnerHistory = [];
   let rolling = false;
+  let showingResult = false;
   let socket = null;
   let intentionalDisconnect = false;
   let reconnectAttempts = 0;
@@ -583,10 +566,13 @@
   const CARD_W = 142; // 130 width + 12 margin-right, must match CSS
   const REEL_LENGTH = 56;
   const WINNER_INDEX = 46;
+  const IDLE_SCROLL_SPEED = 34; // px/sec, ambient pre-roll scroll
 
   const STORAGE_KEYS = {
     channel:'southyy_channel', keyword:'southyy_keyword', avatarProxy:'southyy_avatarProxy',
-    history:'southyy_winnerHistory'
+    history:'southyy_winnerHistory',
+    follower:'southyy_luck_follower', t1:'southyy_luck_t1', t2:'southyy_luck_t2',
+    t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip'
   };
 
   /* ---------------- element refs ---------------- */
@@ -606,8 +592,6 @@
     winChatName:$('winChatName'), winChatMessages:$('winChatMessages'),
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
     historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
-    simulateBtn:$('simulateBtn'), manualInput:$('manualInput'), addManualBtn:$('addManualBtn'),
-    manualChatArea:$('manualChatArea'), processChatBtn:$('processChatBtn'), manualChatMsg:$('manualChatMsg'),
     chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot')
   };
 
@@ -755,6 +739,28 @@
     const active = list.filter(e=>!e.excluded).length;
     els.headCount.textContent = count;
     els.entryCountPill.innerHTML = `<b>${active}</b> in the pool${count!==active ? ` · ${count-active} excluded` : ''}`;
+    renderIdleReel();
+  }
+
+  function renderIdleReel(){
+    if(rolling || showingResult) return;
+    els.reelTrack.style.animation = 'none';
+    els.reelTrack.style.transition = 'none';
+    els.reelTrack.style.transform = 'translateX(0px)';
+    const pool = [...entries.values()].filter(e=>!e.excluded);
+    if(pool.length === 0){
+      els.reelTrack.innerHTML = '';
+      els.emptyReel.style.display = 'flex';
+      return;
+    }
+    els.emptyReel.style.display = 'none';
+    const doubled = pool.concat(pool);
+    els.reelTrack.innerHTML = doubled.map(e=>cardHTML(e, false)).join('');
+    void els.reelTrack.offsetWidth; // force reflow
+    const setWidth = pool.length * CARD_W;
+    const duration = setWidth / IDLE_SCROLL_SPEED;
+    els.reelTrack.style.setProperty('--idle-distance', `-${setWidth}px`);
+    els.reelTrack.style.animation = `idleScroll ${duration}s linear infinite`;
   }
 
   els.entriesGrid.addEventListener('click', e=>{
@@ -811,6 +817,7 @@
   function runReel(pool, winner, durationSec){
     els.emptyReel.style.display = 'none';
     const arr = buildReelArray(pool, winner);
+    els.reelTrack.style.animation = 'none';
     els.reelTrack.style.transition = 'none';
     els.reelTrack.style.transform = 'translateX(0px)';
     els.reelTrack.innerHTML = arr.map((e,i)=>cardHTML(e, i===WINNER_INDEX)).join('');
@@ -837,6 +844,7 @@
     const winner = pickWeightedWinner(pool);
     if(!winner) return;
     rolling = true;
+    showingResult = false;
     els.rollBtn.disabled = true;
     els.winnerOverlay.classList.remove('show');
     const duration = parseFloat(els.durationRange.value);
@@ -850,6 +858,7 @@
 
   function onRollComplete(winner){
     rolling = false;
+    showingResult = true;
     els.rollBtn.disabled = false;
     const slot = els.reelTrack.querySelector('.winner-slot');
     if(slot) slot.classList.add('hit');
@@ -921,8 +930,7 @@
     if(!confirm('Clear all current entries? This cannot be undone.')) return;
     entries.clear();
     currentWinnerUsername = null;
-    els.reelTrack.innerHTML = '';
-    els.emptyReel.style.display = 'flex';
+    showingResult = false;
     els.winnerOverlay.classList.remove('show');
     renderEntries();
   });
@@ -933,90 +941,28 @@
   });
 
   /* ---------------- sliders ---------------- */
-  function bindSlider(input, label, cfgKey){
+  function bindSlider(input, label, cfgKey, storageKey){
+    try{
+      const saved = storageKey && localStorage.getItem(storageKey);
+      if(saved !== null && saved !== undefined && !isNaN(parseFloat(saved))) input.value = saved;
+    }catch(err){}
     const update = ()=>{
       cfg[cfgKey] = parseFloat(input.value);
       label.textContent = cfg[cfgKey].toFixed(1) + 'x';
+      if(storageKey){ try{ localStorage.setItem(storageKey, input.value); }catch(err){} }
     };
     input.addEventListener('input', update);
     update();
   }
-  bindSlider(els.follower, els.followerVal, 'follower');
-  bindSlider(els.t1, els.t1Val, 't1');
-  bindSlider(els.t2, els.t2Val, 't2');
-  bindSlider(els.t3, els.t3Val, 't3');
-  bindSlider(els.mod, els.modVal, 'mod');
-  bindSlider(els.vip, els.vipVal, 'vip');
+  bindSlider(els.follower, els.followerVal, 'follower', STORAGE_KEYS.follower);
+  bindSlider(els.t1, els.t1Val, 't1', STORAGE_KEYS.t1);
+  bindSlider(els.t2, els.t2Val, 't2', STORAGE_KEYS.t2);
+  bindSlider(els.t3, els.t3Val, 't3', STORAGE_KEYS.t3);
+  bindSlider(els.mod, els.modVal, 'mod', STORAGE_KEYS.mod);
+  bindSlider(els.vip, els.vipVal, 'vip', STORAGE_KEYS.vip);
   els.durationRange.addEventListener('input', ()=>{
     els.durVal.textContent = els.durationRange.value + 's';
   });
-
-  /* ---------------- demo / manual tools ---------------- */
-  const DEMO_NAMES = ['pixelpanda','frostyfox','nova_gg','bytebanshee','luckyloot','vex_plays','glimmerx','shadowpaw','crit_kid','moonmuffin','turbo_tina','staticsnap','rustyrook','echo_ember','wispwalker'];
-  els.simulateBtn.addEventListener('click', ()=>{
-    DEMO_NAMES.forEach(n=>{
-      if(entries.has(n)) return;
-      const roll = Math.random();
-      const tier = roll < 0.5 ? 0 : roll < 0.75 ? 1 : roll < 0.92 ? 2 : 3;
-      const mod = Math.random() < 0.08;
-      const vip = !mod && Math.random() < 0.12;
-      entries.set(n, {
-        username:n, displayName:n, tier, mod, vip, excluded:false,
-        avatar: fallbackAvatar(n), enteredAt: Date.now() + Math.random()
-      });
-    });
-    renderEntries();
-  });
-  els.addManualBtn.addEventListener('click', addManual);
-  els.manualInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') addManual(); });
-  function addManual(){
-    const name = els.manualInput.value.trim();
-    if(!name) return;
-    const username = (name.toLowerCase().replace(/[^a-z0-9_]/g,'') || ('user'+Date.now()));
-    if(entries.has(username)){ els.manualInput.value=''; return; }
-    entries.set(username, {
-      username, displayName:name, tier:0, mod:false, vip:false, excluded:false,
-      avatar: fallbackAvatar(username), enteredAt: Date.now()
-    });
-    renderEntries();
-    els.manualInput.value = '';
-  }
-
-  els.processChatBtn.addEventListener('click', processManualChat);
-  function processManualChat(){
-    const raw = els.manualChatArea.value;
-    if(!raw.trim()){ return; }
-    const keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
-    const lines = raw.split('\n');
-    let added = 0, skipped = 0;
-    lines.forEach(line=>{
-      const idx = line.indexOf(':');
-      if(idx === -1) return;
-      const rawName = line.slice(0, idx).trim();
-      const rawMessage = line.slice(idx+1).trim();
-      const message = rawMessage.toLowerCase();
-      const username = rawName.toLowerCase().replace(/[^a-z0-9_]/g,'');
-      if(!username || !message) return;
-
-      recordChatMessage(username, rawMessage);
-      appendChatLine({displayName: rawName || username, color:'', text: rawMessage, mod:false, vip:false, sub:false});
-
-      const words = message.split(/\s+/);
-      if(!words.includes(keyword)){ return; }
-      if(entries.has(username)){ skipped++; return; }
-      entries.set(username, {
-        username, displayName: rawName || username, tier:0, mod:false, vip:false, excluded:false,
-        avatar: fallbackAvatar(username), enteredAt: Date.now()
-      });
-      added++;
-    });
-    renderEntries();
-    els.manualChatArea.value = '';
-    els.manualChatMsg.className = 'msg ok';
-    els.manualChatMsg.textContent = added > 0
-      ? `Added ${added} ${added===1?'entry':'entries'} from pasted chat${skipped?` (${skipped} already entered)`:''}.`
-      : `No new entries found — check that lines are formatted "username: message" and contain "${keyword}".`;
-  }
 
   /* ---------------- twitch connection (direct WebSocket, no external library) ---------------- */
   function setConnected(ok, text){
@@ -1096,7 +1042,7 @@
     }catch(err){
       els.connectBtn.disabled = false;
       setConnected(false, 'Connection failed');
-      flashConnMsg('Your browser blocked the WebSocket connection — you can use the Manual chat feed below instead.', true);
+      flashConnMsg('Your browser blocked the WebSocket connection.', true);
       return;
     }
     socket = sock;
@@ -1169,7 +1115,7 @@
       }else{
         els.connectBtn.disabled = false;
         setConnected(false, 'Connection failed');
-        flashConnMsg('Could not stay connected after several tries — check the channel name and your network, or use the Manual chat feed below.', true);
+        flashConnMsg('Could not stay connected after several tries — check the channel name and your network.', true);
       }
     };
   }
