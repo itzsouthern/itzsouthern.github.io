@@ -376,7 +376,7 @@
 <header>
   <div class="brand">
     <span class="brand-main">SOUTHYY</span>
-    <span class="brand-sub">// Giveaways</span>
+    <span class="brand-sub">Giveaways</span>
   </div>
   <div class="status-cluster">
     <span class="count-pill">Entries <b id="headCount">0</b></span>
@@ -389,7 +389,7 @@
 
   <!-- 1. REEL — top -->
   <div class="panel">
-    <h2><span class="bar"></span>Unboxing reel</h2>
+    <h2><span class="bar"></span>Giveaway reel</h2>
     <div class="reel-shell">
       <div class="reel-viewport" id="reelViewport">
         <div class="empty-reel" id="emptyReel">Nobody's entered yet. Once your chat drops the keyword, they'll show up here.</div>
@@ -754,10 +754,18 @@
       return;
     }
     els.emptyReel.style.display = 'none';
-    const doubled = pool.concat(pool);
+    // Repeat the pool enough times that one "set" alone spans past the visible
+    // viewport, so the loop never runs out of cards and leaves empty space.
+    const viewportW = els.reelViewport.clientWidth || 0;
+    const minSetWidth = viewportW + CARD_W;
+    let setList = pool.slice();
+    while(setList.length * CARD_W < minSetWidth){
+      setList = setList.concat(pool);
+    }
+    const doubled = setList.concat(setList);
     els.reelTrack.innerHTML = doubled.map(e=>cardHTML(e, false)).join('');
     void els.reelTrack.offsetWidth; // force reflow
-    const setWidth = pool.length * CARD_W;
+    const setWidth = setList.length * CARD_W;
     const duration = setWidth / IDLE_SCROLL_SPEED;
     els.reelTrack.style.setProperty('--idle-distance', `-${setWidth}px`);
     els.reelTrack.style.animation = `idleScroll ${duration}s linear infinite`;
@@ -1147,6 +1155,12 @@
   els.channel.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.channel, els.channel.value); }catch(err){} });
   els.keyword.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.keyword, els.keyword.value); }catch(err){} });
   els.avatarProxy.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.avatarProxy, els.avatarProxy.value); }catch(err){} });
+
+  let resizeTimer = null;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=>{ if(!rolling && !showingResult) renderIdleReel(); }, 200);
+  });
 
   /* ---------------- init ---------------- */
   loadPersisted();
