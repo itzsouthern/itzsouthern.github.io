@@ -377,7 +377,10 @@
 
   <!-- 3. WINNER HISTORY -->
   <div class="panel">
-    <h2><span class="bar"></span>Winner history</h2>
+    <div class="entries-head">
+      <h2 style="margin:0;"><span class="bar"></span>Winner history</h2>
+      <button class="btn btn-ghost btn-sm" id="clearHistoryBtn">Clear history</button>
+    </div>
     <div class="history-list" id="historyList"></div>
   </div>
 
@@ -431,14 +434,12 @@
     <label class="field" for="keywordInput">Entry keyword</label>
     <input type="text" id="keywordInput" placeholder="!enter" value="!enter">
 
-    <label class="field" for="clientIdInput">Client ID <span style="color:#525a70">(optional — for real avatars)</span></label>
-    <input type="text" id="clientIdInput" placeholder="Twitch app Client ID">
-
-    <label class="field" for="tokenInput">Access token <span style="color:#525a70">(optional)</span></label>
-    <input type="password" id="tokenInput" placeholder="oauth token">
+    <label class="field" for="avatarProxyInput">Avatar proxy URL <span style="color:#525a70">(optional — required for real avatars, see below)</span></label>
+    <input type="text" id="avatarProxyInput" placeholder="https://your-worker.workers.dev">
 
     <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:16px;">Connect</button>
     <div class="msg" id="connMsg"></div>
+    <div class="msg" id="avatarMsg"></div>
     <details class="help">
       <summary>Won't connect — what to check</summary>
       <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.<br><br>
@@ -446,8 +447,8 @@
     </details>
 
     <details class="help">
-      <summary>Where do I get a Client ID / token?</summary>
-      <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, create an app at <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">dev.twitch.tv/console/apps</a> for a Client ID, and generate an access token (no special scopes required) at a token generator of your choice. Nothing you enter here leaves your browser except direct calls to Twitch's own API.</p>
+      <summary>Where do I get an avatar proxy URL?</summary>
+      <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, deploy the free, ready-made proxy in <code style="color:var(--text);">avatar-proxy-worker.js</code> (next to this file) to Cloudflare Workers — steps are in a comment at the top of that file, including creating a Twitch app for a Client ID + Client Secret, which live only in the Worker's own settings, never in this page. Paste the *.workers.dev URL it gives you above. The proxy exists because Twitch's own API blocks direct browser requests (CORS) — it can't be called straight from this page.</p>
     </details>
   </div>
 
@@ -462,7 +463,7 @@
 
 </div>
 
-<footer>SOUTHYY GIVEAWAYS — runs entirely in this browser tab. Refreshing the page clears entries.</footer>
+<footer>SOUTHYY GIVEAWAYS — runs entirely in this browser tab. Refreshing the page clears current entries; your connection settings and winner history are saved.</footer>
 
 <script>
 (function(){
@@ -481,7 +482,7 @@
   let flushScheduled = false;
 
   const cfg = {
-    channel:'', clientId:'', token:'', keyword:'!enter',
+    channel:'', avatarProxy:'', keyword:'!enter',
     follower:1.0, t1:1.2, t2:1.5, t3:2.0, mod:1.5, vip:1.3
   };
 
@@ -491,11 +492,16 @@
   const REEL_LENGTH = 56;
   const WINNER_INDEX = 46;
 
+  const STORAGE_KEYS = {
+    channel:'southyy_channel', keyword:'southyy_keyword', avatarProxy:'southyy_avatarProxy',
+    history:'southyy_winnerHistory'
+  };
+
   /* ---------------- element refs ---------------- */
   const $ = id => document.getElementById(id);
   const els = {
-    channel:$('channelInput'), keyword:$('keywordInput'), clientId:$('clientIdInput'), token:$('tokenInput'),
-    connectBtn:$('connectBtn'), connMsg:$('connMsg'), connPill:$('connPill'), connText:$('connText'),
+    channel:$('channelInput'), keyword:$('keywordInput'), avatarProxy:$('avatarProxyInput'),
+    connectBtn:$('connectBtn'), connMsg:$('connMsg'), connPill:$('connPill'), connText:$('connText'), avatarMsg:$('avatarMsg'),
     headCount:$('headCount'),
     t1:$('t1Range'), t2:$('t2Range'), t3:$('t3Range'), mod:$('modRange'), vip:$('vipRange'), follower:$('followerRange'),
     t1Val:$('t1Val'), t2Val:$('t2Val'), t3Val:$('t3Val'), modVal:$('modVal'), vipVal:$('vipVal'), followerVal:$('followerVal'),
@@ -505,7 +511,7 @@
     winnerPanel:$('winnerPanel'), winAvatar:$('winAvatar'), winName:$('winName'), winRarity:$('winRarity'),
     winTags:$('winTags'), rerollBtn:$('rerollBtn'), excludeRerollBtn:$('excludeRerollBtn'), confettiLayer:$('confettiLayer'),
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
-    historyList:$('historyList'),
+    historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
     simulateBtn:$('simulateBtn'), manualInput:$('manualInput'), addManualBtn:$('addManualBtn'),
     manualChatArea:$('manualChatArea'), processChatBtn:$('processChatBtn'), manualChatMsg:$('manualChatMsg')
   };
@@ -519,7 +525,7 @@
     return `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(username)}`;
   }
   function queueAvatarFetch(username){
-    if(!cfg.clientId || !cfg.token) return;
+    if(!cfg.avatarProxy) return;
     avatarQueue.push(username);
     if(!flushScheduled){
       flushScheduled = true;
@@ -532,18 +538,20 @@
     if(batch.length === 0) return;
     const params = batch.map(u => `login=${encodeURIComponent(u)}`).join('&');
     try{
-      const res = await fetch(`https://api.twitch.tv/helix/users?${params}`, {
-        headers:{ 'Client-Id': cfg.clientId, 'Authorization': `Bearer ${cfg.token}` }
-      });
-      if(!res.ok) throw new Error('helix status ' + res.status);
+      const res = await fetch(`${cfg.avatarProxy}/users?${params}`);
+      if(!res.ok) throw new Error('proxy status ' + res.status);
       const data = await res.json();
       (data.data || []).forEach(u=>{
         const e = entries.get(u.login);
         if(e) e.avatar = u.profile_image_url;
       });
       renderEntries();
+      els.avatarMsg.className = 'msg';
+      els.avatarMsg.textContent = '';
     }catch(err){
       console.warn('Avatar fetch failed, keeping generated avatars:', err);
+      els.avatarMsg.className = 'msg err';
+      els.avatarMsg.textContent = 'Real avatars aren\'t loading — check your avatar proxy URL, Client ID, and token.';
     }
     if(avatarQueue.length > 0) setTimeout(flushAvatarQueue, 1200);
   }
@@ -752,7 +760,15 @@
     els.historyList.innerHTML = winnerHistory.slice(0,25).map(w=>
       `<span class="hist-chip"><img src="${escapeHTML(w.avatar)}" alt="">${escapeHTML(w.displayName)}</span>`
     ).join('');
+    try{ localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(winnerHistory.slice(0,25))); }catch(err){}
   }
+
+  els.clearHistoryBtn.addEventListener('click', ()=>{
+    if(winnerHistory.length === 0) return;
+    if(!confirm('Clear winner history? This cannot be undone.')) return;
+    winnerHistory = [];
+    renderHistory();
+  });
 
   /* ---------------- roll / reroll / exclude buttons ---------------- */
   els.rollBtn.addEventListener('click', startRoll);
@@ -1004,13 +1020,32 @@
     const channel = els.channel.value.trim().replace(/^#/, '').toLowerCase();
     if(!channel){ flashConnMsg('Enter a channel name first.', true); return; }
     cfg.channel = channel;
-    cfg.clientId = els.clientId.value.trim();
-    cfg.token = els.token.value.trim().replace(/^oauth:/,'');
+    cfg.avatarProxy = els.avatarProxy.value.trim().replace(/\/$/,'');
     cfg.keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
     connectToChannel(channel);
   });
 
+  /* ---------------- persisted connection fields + history ---------------- */
+  function loadPersisted(){
+    try{
+      const savedChannel = localStorage.getItem(STORAGE_KEYS.channel);
+      const savedKeyword = localStorage.getItem(STORAGE_KEYS.keyword);
+      const savedProxy = localStorage.getItem(STORAGE_KEYS.avatarProxy);
+      if(savedChannel) els.channel.value = savedChannel;
+      if(savedKeyword) els.keyword.value = savedKeyword;
+      if(savedProxy) els.avatarProxy.value = savedProxy;
+      const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
+      if(savedHistory) winnerHistory = JSON.parse(savedHistory);
+    }catch(err){
+      console.warn('Could not load saved settings:', err);
+    }
+  }
+  els.channel.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.channel, els.channel.value); }catch(err){} });
+  els.keyword.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.keyword, els.keyword.value); }catch(err){} });
+  els.avatarProxy.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.avatarProxy, els.avatarProxy.value); }catch(err){} });
+
   /* ---------------- init ---------------- */
+  loadPersisted();
   renderEntries();
   renderHistory();
 })();
