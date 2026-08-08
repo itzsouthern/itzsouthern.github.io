@@ -606,6 +606,16 @@
     const arr = chatLog.get(username);
     arr.push({text, at:Date.now()});
     if(arr.length > MAX_CHAT_MSGS_PER_USER) arr.shift();
+    if(currentWinnerUsername === username && els.winnerOverlay.classList.contains('show')){
+      renderWinnerChatMessages(username);
+    }
+  }
+
+  function renderWinnerChatMessages(username){
+    const history = chatLog.get(username) || [];
+    els.winChatMessages.innerHTML = history.length
+      ? history.slice(-8).map(m=>`<div class="winner-chat-line">${escapeHTML(m.text)}</div>`).join('')
+      : `<div class="winner-chat-empty">No chat messages recorded for this entry.</div>`;
   }
 
   function appendChatLine({displayName, color, text, mod, vip, sub}){
@@ -845,10 +855,7 @@
     els.winTags.innerHTML = tags.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join('');
 
     els.winChatName.textContent = e.displayName;
-    const history = chatLog.get(e.username) || [];
-    els.winChatMessages.innerHTML = history.length
-      ? history.slice(-8).map(m=>`<div class="winner-chat-line">${escapeHTML(m.text)}</div>`).join('')
-      : `<div class="winner-chat-empty">No chat messages recorded for this entry.</div>`;
+    renderWinnerChatMessages(e.username);
 
     els.winnerOverlay.classList.add('show');
   }
