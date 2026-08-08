@@ -43,6 +43,14 @@
     overflow-x:hidden;
   }
   .bg-fx{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
+  .bg-image{
+    position:absolute;inset:-2px;
+    background:url('bg-southern.jpg') center top / cover no-repeat;
+  }
+  .bg-image:after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(10,13,20,.35) 0%, rgba(10,13,20,.6) 55%, rgba(10,13,20,.88) 100%);
+  }
   .bg-grid{
     position:absolute;inset:-2px;
     background-image:
@@ -112,7 +120,8 @@
   .chat-sidebar{
     flex:0 0 320px;position:sticky;top:88px;height:calc(100vh - 108px);
     display:flex;flex-direction:column;overflow:hidden;
-    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    background:linear-gradient(180deg, rgba(18,22,31,.8), rgba(24,29,42,.8));
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     border:1px solid var(--line);border-radius:16px;
   }
   .chat-sidebar-head{
@@ -137,7 +146,8 @@
   }
 
   .panel{
-    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    background:linear-gradient(180deg, rgba(18,22,31,.8), rgba(24,29,42,.8));
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     border:1px solid var(--line);
     border-radius:16px;
     padding:18px 18px 20px;
@@ -354,6 +364,7 @@
 <body>
 
 <div class="bg-fx" aria-hidden="true">
+  <div class="bg-image"></div>
   <div class="bg-grid"></div>
   <span class="orb orb-a"></span>
   <span class="orb orb-b"></span>
