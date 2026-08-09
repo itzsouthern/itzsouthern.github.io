@@ -97,7 +97,9 @@
     padding:7px 13px;border-radius:999px;
     background:var(--panel-2);border:1px solid var(--line);
     font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);
+    cursor:pointer;
   }
+  .pill:hover{border-color:rgba(255,255,255,.25);}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex:0 0 auto;}
   .pill.on .dot{background:var(--green);box-shadow:0 0 8px var(--green);}
   .pill.on{color:var(--text);border-color:rgba(58,222,125,.35);}
@@ -105,6 +107,23 @@
   .pill.err{color:#ffb0b0;border-color:rgba(255,77,77,.35);}
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
+
+  /* ---------- page nav dropdown ---------- */
+  .nav-dropdown{position:relative;}
+  .nav-dropdown > .btn{font-size:16px;padding:9px 12px;line-height:1;}
+  .nav-menu{
+    position:absolute;top:calc(100% + 8px);right:0;z-index:30;
+    display:none;flex-direction:column;gap:2px;min-width:180px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:6px;box-shadow:0 14px 34px -10px rgba(0,0,0,.6);
+  }
+  .nav-menu.show{display:flex;}
+  .nav-menu a{
+    display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;
+    color:var(--text);text-decoration:none;font-family:'General Sans',sans-serif;
+    font-weight:600;font-size:13px;
+  }
+  .nav-menu a:hover{background:var(--panel-3);}
   .timer-widget{
     display:flex;align-items:center;gap:8px;
     padding:6px 8px 6px 13px;border-radius:999px;
@@ -299,6 +318,28 @@
   .duration-wrap{flex:1;min-width:220px;}
   .duration-wrap .slider-label{margin-bottom:6px;}
 
+  /* connect / login modal */
+  .connect-overlay{
+    position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
+    background:rgba(5,6,12,.72);backdrop-filter:blur(4px);padding:20px;
+  }
+  .connect-overlay.show{display:flex;animation:overlayIn .2s ease-out;}
+  .connect-panel{
+    width:100%;max-width:440px;max-height:88vh;overflow-y:auto;
+    border-radius:14px;padding:24px;position:relative;
+    background:linear-gradient(135deg, rgba(124,58,237,.22), rgba(255,46,159,.14)), var(--panel);
+    border:1px solid var(--line);
+    box-shadow:0 20px 60px -12px rgba(0,0,0,.6);
+    animation:panelIn .3s ease-out;
+  }
+  .connect-panel h2{margin-top:0;}
+  .connect-close{
+    position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;
+    background:var(--panel-3);border:1px solid var(--line);color:var(--text-dim);
+    font-size:14px;line-height:26px;text-align:center;cursor:pointer;z-index:3;padding:0;
+  }
+  .connect-close:hover{color:var(--text);}
+
   /* winner popout */
   .winner-overlay{
     position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
@@ -376,6 +417,7 @@
     .reel-track{transition:none !important;animation:none !important;}
     .confetti{display:none;}
     .winner-overlay.show, .winner-panel{animation:none;}
+    .connect-overlay.show, .connect-panel{animation:none;}
   }
 </style>
 </head>
@@ -406,9 +448,14 @@
     <span class="count-pill">Entries <b id="headCount">0</b></span>
     <span class="count-pill" title="Steam trade links captured from chat">Trade links <b id="tradeLinkCount">0</b></span>
     <button class="btn btn-ghost btn-sm" id="soundToggleBtn" title="Toggle roll tick sound">🔊</button>
-    <a class="btn btn-ghost btn-sm" href="wheel.html">🎡 Wheel</a>
-    <a class="btn btn-ghost btn-sm" href="tradelinks.html">🔗 Trade Links</a>
-    <span class="pill" id="connPill"><span class="dot"></span><span id="connText">Disconnected</span></span>
+    <div class="nav-dropdown">
+      <button class="btn btn-ghost btn-sm" id="navMenuBtn" title="Pages" aria-label="Pages menu">☰</button>
+      <div class="nav-menu" id="navMenu">
+        <a href="wheel.html">🎡 Giveaway wheel</a>
+        <a href="tradelinks.html">🔗 Trade links</a>
+      </div>
+    </div>
+    <span class="pill" id="connPill" role="button" tabindex="0" title="Connect to chat"><span class="dot"></span><span id="connText">Disconnected</span></span>
   </div>
 </header>
 
@@ -503,42 +550,6 @@
     </details>
   </div>
 
-  <!-- 5. TWITCH CONNECTION — very bottom -->
-  <div class="panel">
-    <h2><span class="bar"></span>Connect to chat</h2>
-    <label class="field" for="channelInput">Twitch channel <span style="color:#525a70">(your Twitch username, no # needed)</span></label>
-    <input type="text" id="channelInput" placeholder="southyy">
-
-    <label class="field" for="keywordInput">Entry keyword</label>
-    <input type="text" id="keywordInput" placeholder="!enter" value="!enter">
-
-    <label class="field" for="avatarProxyInput">Avatar proxy URL <span style="color:#525a70">(optional — required for real avatars, see below)</span></label>
-    <input type="text" id="avatarProxyInput" placeholder="https://your-worker.workers.dev">
-
-    <label class="field" for="syncKeyInput">Cloud sync key <span style="color:#525a70">(optional — keeps winner history &amp; trade links across devices/restarts, see below)</span></label>
-    <input type="password" id="syncKeyInput" placeholder="Same DATA_KEY you set on the Worker">
-
-    <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:16px;">Connect</button>
-    <div class="msg" id="connMsg"></div>
-    <div class="msg" id="avatarMsg"></div>
-    <div class="msg" id="syncMsg"></div>
-    <details class="help">
-      <summary>Won't connect — what to check</summary>
-      <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.</p>
-    </details>
-
-    <details class="help">
-      <summary>Where do I get an avatar proxy URL?</summary>
-      <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, deploy the free, ready-made proxy in <code style="color:var(--text);">avatar-proxy-worker.js</code> (next to this file) to Cloudflare Workers — steps are in a comment at the top of that file, including creating a Twitch app for a Client ID + Client Secret, which live only in the Worker's own settings, never in this page. Paste the *.workers.dev URL it gives you above. The proxy exists because Twitch's own API blocks direct browser requests (CORS) — it can't be called straight from this page.</p>
-    </details>
-
-    <details class="help">
-      <summary>What does the cloud sync key do?</summary>
-      <p>Without it, winner history and trade links only live in this browser's local storage — they're gone if you use a private/incognito tab (wiped when it closes), clear browsing data, or switch devices. Setting a sync key stores that data in your Cloudflare Worker (same one as the avatar proxy above) instead, so it's always there no matter which device or browser you open the site in.</p>
-      <p>Set it up once: on your deployed Worker, add a Secret variable named <code style="color:var(--text);">DATA_KEY</code> with any long random value you make up (steps are in <code style="color:var(--text);">avatar-proxy-worker.js</code>'s comments), then paste that same value here. This key only ever lives in your Worker's settings and in this field's saved value in your own browser — it's never published anywhere on the site itself, so visitors browsing your site can't see or extract it. Wheel and Trade Links pages pick up this same setting automatically.</p>
-    </details>
-  </div>
-
 
 </div>
 <!-- /.layout -->
@@ -549,7 +560,7 @@
     <span class="chat-live-dot" id="chatLiveDot"></span>
   </div>
   <div class="chat-lines" id="chatLines">
-    <div class="chat-empty" id="chatEmpty">Connect to chat (or paste chat below) to see live messages here.</div>
+    <div class="chat-empty" id="chatEmpty">Click the connection status in the header to connect and see live messages here.</div>
   </div>
 </aside>
 
@@ -576,6 +587,45 @@
       <h4>Recent chat from <span id="winChatName"></span></h4>
       <div id="winChatMessages"></div>
     </div>
+  </div>
+</div>
+
+<div class="connect-overlay" id="connectOverlay">
+  <div class="connect-panel" id="connectPanel">
+    <button class="connect-close" id="connectCloseBtn" aria-label="Close">✕</button>
+    <h2><span class="bar"></span>Connect to chat</h2>
+    <label class="field" for="channelInput">Twitch channel <span style="color:#525a70">(your Twitch username, no # needed)</span></label>
+    <input type="text" id="channelInput" placeholder="southyy">
+
+    <label class="field" for="keywordInput">Entry keyword</label>
+    <input type="text" id="keywordInput" placeholder="!enter" value="!enter">
+
+    <label class="field" for="avatarProxyInput">Avatar proxy URL <span style="color:#525a70">(optional — required for real avatars, see below)</span></label>
+    <input type="text" id="avatarProxyInput" placeholder="https://your-worker.workers.dev">
+
+    <label class="field" for="syncKeyInput">Cloud sync key <span style="color:#525a70">(optional — keeps winner history &amp; trade links across devices/restarts, see below)</span></label>
+    <input type="password" id="syncKeyInput" placeholder="Same DATA_KEY you set on the Worker">
+
+    <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:16px;">Connect</button>
+    <div class="msg">Once connected, refreshing this page keeps you connected automatically — no need to click Connect again until you actually close the browser.</div>
+    <div class="msg" id="connMsg"></div>
+    <div class="msg" id="avatarMsg"></div>
+    <div class="msg" id="syncMsg"></div>
+    <details class="help">
+      <summary>Won't connect — what to check</summary>
+      <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.</p>
+    </details>
+
+    <details class="help">
+      <summary>Where do I get an avatar proxy URL?</summary>
+      <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, deploy the free, ready-made proxy in <code style="color:var(--text);">avatar-proxy-worker.js</code> (next to this file) to Cloudflare Workers — steps are in a comment at the top of that file, including creating a Twitch app for a Client ID + Client Secret, which live only in the Worker's own settings, never in this page. Paste the *.workers.dev URL it gives you above. The proxy exists because Twitch's own API blocks direct browser requests (CORS) — it can't be called straight from this page.</p>
+    </details>
+
+    <details class="help">
+      <summary>What does the cloud sync key do?</summary>
+      <p>Without it, winner history and trade links only live in this browser's local storage — they're gone if you use a private/incognito tab (wiped when it closes), clear browsing data, or switch devices. Setting a sync key stores that data in your Cloudflare Worker (same one as the avatar proxy above) instead, so it's always there no matter which device or browser you open the site in.</p>
+      <p>Set it up once: on your deployed Worker, add a Secret variable named <code style="color:var(--text);">DATA_KEY</code> with any long random value you make up (steps are in <code style="color:var(--text);">avatar-proxy-worker.js</code>'s comments), then paste that same value here. This key only ever lives in your Worker's settings and in this field's saved value in your own browser — it's never published anywhere on the site itself, so visitors browsing your site can't see or extract it. Wheel and Trade Links pages pick up this same setting automatically.</p>
+    </details>
   </div>
 </div>
 
@@ -624,6 +674,11 @@
     tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled', syncKey:'southyy_syncKey'
   };
 
+  // sessionStorage (not localStorage) on purpose: survives page refreshes but
+  // clears when the browser/tab is actually closed, so a refresh stays
+  // connected without re-clicking Connect, while closing out requires it again.
+  const SESSION_KEYS = { wasConnected:'southyy_wasConnected' };
+
   /* ---------------- element refs ---------------- */
   const $ = id => document.getElementById(id);
   const els = {
@@ -646,7 +701,9 @@
     timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
     timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
     soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount'),
-    syncKey:$('syncKeyInput'), syncMsg:$('syncMsg')
+    syncKey:$('syncKeyInput'), syncMsg:$('syncMsg'),
+    navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'),
+    connectOverlay:$('connectOverlay'), connectPanel:$('connectPanel'), connectCloseBtn:$('connectCloseBtn')
   };
 
   function escapeHTML(str){
@@ -722,6 +779,34 @@
     els.soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
     try{ localStorage.setItem(STORAGE_KEYS.soundEnabled, soundEnabled ? '1' : '0'); }catch(err){}
     if(soundEnabled) playTick();
+  });
+
+  /* ---------------- page nav dropdown ---------------- */
+  els.navMenuBtn.addEventListener('click', e=>{
+    e.stopPropagation();
+    els.navMenu.classList.toggle('show');
+  });
+  document.addEventListener('click', e=>{
+    if(!els.navMenu.classList.contains('show')) return;
+    if(!e.target.closest('.nav-dropdown')) els.navMenu.classList.remove('show');
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape') els.navMenu.classList.remove('show');
+  });
+
+  /* ---------------- connect / login modal ---------------- */
+  function openConnectModal(){ els.connectOverlay.classList.add('show'); }
+  function closeConnectModal(){ els.connectOverlay.classList.remove('show'); }
+  els.connPill.addEventListener('click', openConnectModal);
+  els.connPill.addEventListener('keydown', e=>{
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openConnectModal(); }
+  });
+  els.connectCloseBtn.addEventListener('click', closeConnectModal);
+  els.connectOverlay.addEventListener('click', e=>{
+    if(e.target === els.connectOverlay) closeConnectModal();
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape') closeConnectModal();
   });
 
   /* ---------------- steam trade link capture (shared with tradelinks.html via localStorage) ---------------- */
@@ -1301,6 +1386,8 @@
           reconnectAttempts = 0;
           setConnected(true);
           flashConnMsg(`Listening for "${cfg.keyword}" in #${cfg.channel}.`, false);
+          try{ sessionStorage.setItem(SESSION_KEYS.wasConnected, '1'); }catch(err){}
+          closeConnectModal();
           return;
         }
         if(msg.command === 'NOTICE'){
@@ -1355,14 +1442,15 @@
     };
   }
 
-  els.connectBtn.addEventListener('click', ()=>{
+  function attemptConnect(){
     const channel = els.channel.value.trim().replace(/^#/, '').toLowerCase();
     if(!channel){ flashConnMsg('Enter a channel name first.', true); return; }
     cfg.channel = channel;
     cfg.avatarProxy = els.avatarProxy.value.trim().replace(/\/$/,'');
     cfg.keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
     connectToChannel(channel);
-  });
+  }
+  els.connectBtn.addEventListener('click', attemptConnect);
 
   /* ---------------- persisted connection fields + history ---------------- */
   function loadPersisted(){
@@ -1480,6 +1568,15 @@
     els.tradeLinkCount.textContent = raw ? Object.keys(JSON.parse(raw)).length : 0;
   }catch(err){}
   loadRemoteWinnersOnInit();
+
+  let autoReconnecting = false;
+  try{
+    if(sessionStorage.getItem(SESSION_KEYS.wasConnected) === '1' && els.channel.value.trim()){
+      autoReconnecting = true;
+      attemptConnect();
+    }
+  }catch(err){}
+  if(!autoReconnecting) openConnectModal();
 })();
 </script>
 </body>

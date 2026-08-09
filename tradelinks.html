@@ -85,6 +85,23 @@
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
 
+  /* ---------- page nav dropdown ---------- */
+  .nav-dropdown{position:relative;}
+  .nav-dropdown > .btn{font-size:16px;padding:9px 12px;line-height:1;}
+  .nav-menu{
+    position:absolute;top:calc(100% + 8px);right:0;z-index:30;
+    display:none;flex-direction:column;gap:2px;min-width:180px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:6px;box-shadow:0 14px 34px -10px rgba(0,0,0,.6);
+  }
+  .nav-menu.show{display:flex;}
+  .nav-menu a{
+    display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;
+    color:var(--text);text-decoration:none;font-family:'General Sans',sans-serif;
+    font-weight:600;font-size:13px;
+  }
+  .nav-menu a:hover{background:var(--panel-3);}
+
   /* ---------- layout ---------- */
   .page-grid{max-width:900px;margin:0 auto;padding:22px 26px 60px;}
   .layout{display:flex;flex-direction:column;gap:20px;}
@@ -177,8 +194,13 @@
   <div class="status-cluster">
     <span class="count-pill"><b id="countPill">0</b> saved</span>
     <span class="count-pill" id="syncStatus">Cloud sync: off</span>
-    <a class="btn btn-ghost btn-sm" href="index.html">← Giveaway reel</a>
-    <a class="btn btn-ghost btn-sm" href="wheel.html">🎡 Wheel</a>
+    <div class="nav-dropdown">
+      <button class="btn btn-ghost btn-sm" id="navMenuBtn" title="Pages" aria-label="Pages menu">☰</button>
+      <div class="nav-menu" id="navMenu">
+        <a href="index.html">🎰 Giveaway reel</a>
+        <a href="wheel.html">🎡 Giveaway wheel</a>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -227,7 +249,7 @@
   const els = {
     searchInput:$('searchInput'), tlList:$('tlList'), countPill:$('countPill'), clearAllBtn:$('clearAllBtn'),
     manualName:$('manualName'), manualLink:$('manualLink'), manualAddBtn:$('manualAddBtn'), manualMsg:$('manualMsg'),
-    syncStatus:$('syncStatus')
+    syncStatus:$('syncStatus'), navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu')
   };
 
   function escapeHTML(str){
@@ -386,6 +408,19 @@
   // Pick up captures from the giveaway reel page if it's open in another tab.
   window.addEventListener('storage', e=>{
     if(e.key === TRADELINKS_KEY) render();
+  });
+
+  /* ---------------- page nav dropdown ---------------- */
+  els.navMenuBtn.addEventListener('click', e=>{
+    e.stopPropagation();
+    els.navMenu.classList.toggle('show');
+  });
+  document.addEventListener('click', e=>{
+    if(!els.navMenu.classList.contains('show')) return;
+    if(!e.target.closest('.nav-dropdown')) els.navMenu.classList.remove('show');
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape') els.navMenu.classList.remove('show');
   });
 
   render();
