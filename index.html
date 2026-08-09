@@ -675,6 +675,12 @@
   /* ---------------- twitch tag parsing ---------------- */
   function parseTier(tags){
     const badges = tags.badges || {};
+    // Early/"OG" subs get a "founder" badge instead of "subscriber" — it
+    // doesn't encode a tier number the way subscriber badges do, so treat
+    // any Founder as at least Tier 1 rather than falling through to "no sub".
+    if(badges.founder !== undefined){
+      return 1;
+    }
     if(badges.subscriber !== undefined){
       const v = parseInt(badges.subscriber, 10) || 0;
       if(v >= 3000) return 3;
