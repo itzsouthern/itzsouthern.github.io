@@ -105,6 +105,22 @@
   .pill.err{color:#ffb0b0;border-color:rgba(255,77,77,.35);}
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
+  .timer-widget{
+    display:flex;align-items:center;gap:8px;
+    padding:6px 8px 6px 13px;border-radius:999px;
+    background:var(--panel-2);border:1px solid var(--line);
+  }
+  .timer-display{
+    font-family:'Space Mono',monospace;font-size:14px;font-weight:700;
+    color:var(--text);min-width:52px;text-align:center;
+  }
+  .timer-display.done{color:var(--red);animation:timerPulse 1s ease-in-out infinite;}
+  @keyframes timerPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .timer-input{
+    width:60px;background:var(--panel-3);border:1px solid var(--line);color:var(--text);
+    padding:5px 7px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;text-align:center;
+  }
+  .timer-widget .btn-sm{padding:6px 10px;font-size:11px;}
 
   /* ---------- layout ---------- */
   .page-grid{
@@ -379,7 +395,15 @@
     <span class="brand-sub">Giveaways</span>
   </div>
   <div class="status-cluster">
+    <div class="timer-widget" id="timerWidget">
+      <span class="timer-display" id="timerDisplay">05:00</span>
+      <input type="text" id="timerInput" class="timer-input" placeholder="mm:ss" value="5:00">
+      <button class="btn btn-ghost btn-sm" id="timerStartBtn">Start</button>
+      <button class="btn btn-ghost btn-sm" id="timerPauseBtn">Pause</button>
+      <button class="btn btn-ghost btn-sm" id="timerResetBtn">Reset</button>
+    </div>
     <span class="count-pill">Entries <b id="headCount">0</b></span>
+    <button class="btn btn-ghost btn-sm" id="soundToggleBtn" title="Toggle roll tick sound">🔊</button>
     <span class="pill" id="connPill"><span class="dot"></span><span id="connText">Disconnected</span></span>
   </div>
 </header>
@@ -557,6 +581,7 @@
   let winnerHistory = [];
   let rolling = false;
   let showingResult = false;
+  let soundEnabled = true;
   let socket = null;
   let intentionalDisconnect = false;
   let reconnectAttempts = 0;
@@ -582,7 +607,7 @@
     history:'southyy_winnerHistory',
     follower:'southyy_luck_follower', t1:'southyy_luck_t1', t2:'southyy_luck_t2',
     t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip',
-    tierOverrides:'southyy_tierOverrides'
+    tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled'
   };
 
   /* ---------------- element refs ---------------- */
@@ -603,12 +628,86 @@
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
     historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
     chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot'),
-    tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg')
+    tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg'),
+    timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
+    timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
+    soundToggleBtn:$('soundToggleBtn')
   };
 
   function escapeHTML(str){
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+
+  /* ---------------- roll tick sound (synthesized, no audio file) ---------------- */
+  let audioCtx = null;
+  function getAudioCtx(){
+    if(!audioCtx){
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(err){ return null; }
+    }
+    return audioCtx;
+  }
+  function unlockAudioOnce(){
+    const ctx = getAudioCtx();
+    if(ctx && ctx.state === 'suspended') ctx.resume();
+    window.removeEventListener('pointerdown', unlockAudioOnce);
+    window.removeEventListener('keydown', unlockAudioOnce);
+  }
+  window.addEventListener('pointerdown', unlockAudioOnce);
+  window.addEventListener('keydown', unlockAudioOnce);
+
+  function playTick(){
+    if(!soundEnabled) return;
+    const ctx = getAudioCtx();
+    if(!ctx) return;
+    if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.exponentialRampToValueAtTime(650, now + 0.04);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.06);
+  }
+
+  // Watches the reel track's live on-screen position (however it's being
+  // animated — CSS transition during a roll, CSS animation while idle) and
+  // fires a tick each time a new card crosses the center pointer.
+  let tickLastIndex = null;
+  function resetTickTracking(){ tickLastIndex = null; }
+  function tickWatcherFrame(){
+    const cardCount = els.reelTrack.children.length;
+    if(cardCount > 0){
+      const transform = getComputedStyle(els.reelTrack).transform;
+      let x = 0;
+      if(transform && transform !== 'none'){
+        const match = transform.match(/matrix\(([^)]+)\)/);
+        if(match){
+          const parts = match[1].split(',').map(parseFloat);
+          if(parts.length >= 5) x = parts[4];
+        }
+      }
+      const pointerOffset = els.reelViewport.clientWidth / 2;
+      const cardIndex = Math.floor((pointerOffset - x) / CARD_W);
+      if(tickLastIndex !== null && cardIndex !== tickLastIndex && rolling){
+        playTick();
+      }
+      tickLastIndex = cardIndex;
+    }
+    requestAnimationFrame(tickWatcherFrame);
+  }
+  requestAnimationFrame(tickWatcherFrame);
+
+  els.soundToggleBtn.addEventListener('click', ()=>{
+    soundEnabled = !soundEnabled;
+    els.soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
+    try{ localStorage.setItem(STORAGE_KEYS.soundEnabled, soundEnabled ? '1' : '0'); }catch(err){}
+    if(soundEnabled) playTick();
+  });
 
   /* ---------------- live chat sidebar ---------------- */
   function recordChatMessage(username, text){
@@ -885,6 +984,7 @@
     els.reelTrack.style.transform = 'translateX(0px)';
     els.reelTrack.innerHTML = arr.map((e,i)=>cardHTML(e, i===WINNER_INDEX)).join('');
     void els.reelTrack.offsetWidth; // force reflow
+    resetTickTracking();
 
     const viewportW = els.reelViewport.clientWidth;
     const jitter = Math.random()*60 - 30;
@@ -916,7 +1016,7 @@
   }
 
   function randomDropType(){
-    return Math.random() < 0.5 ? 'WEAPON SKIN ROLL' : 'STICKER ROLL';
+    return Math.random() < 0.9 ? 'WEAPON SKIN ROLL' : 'STICKER ROLL';
   }
 
   function onRollComplete(winner){
@@ -1208,6 +1308,11 @@
         els.tierOverrideArea.value = savedOverrides;
         tierOverrides = parseTierOverridesText(savedOverrides);
       }
+      const savedSound = localStorage.getItem(STORAGE_KEYS.soundEnabled);
+      if(savedSound !== null){
+        soundEnabled = savedSound === '1';
+        els.soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
+      }
     }catch(err){
       console.warn('Could not load saved settings:', err);
     }
@@ -1221,6 +1326,75 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(()=>{ if(!rolling && !showingResult) renderIdleReel(); }, 200);
   });
+
+  /* ---------------- countdown timer (standalone tool — doesn't affect the giveaway) ---------------- */
+  let timerRemaining = 300; // seconds
+  let timerInterval = null;
+  let timerPaused = false; // true only when Pause was hit mid-countdown (so Start resumes instead of re-reading the input)
+
+  function parseTimerInput(str){
+    str = (str || '').trim();
+    if(!str) return null;
+    if(str.includes(':')){
+      const parts = str.split(':').map(p=>parseFloat(p));
+      if(parts.some(isNaN)) return null;
+      if(parts.length === 2) return parts[0]*60 + parts[1];
+      if(parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
+      return null;
+    }
+    const mins = parseFloat(str);
+    return isNaN(mins) ? null : Math.round(mins*60);
+  }
+  function formatTimer(totalSec){
+    totalSec = Math.max(0, Math.round(totalSec));
+    const h = Math.floor(totalSec/3600);
+    const m = Math.floor((totalSec%3600)/60);
+    const s = totalSec%60;
+    const pad = n => String(n).padStart(2,'0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }
+  function updateTimerDisplay(){
+    els.timerDisplay.textContent = formatTimer(timerRemaining);
+  }
+  function stopTimerInterval(){
+    if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
+  }
+  els.timerStartBtn.addEventListener('click', ()=>{
+    if(timerInterval) return;
+    if(!timerPaused){
+      const parsed = parseTimerInput(els.timerInput.value);
+      if(parsed === null || parsed <= 0) return;
+      timerRemaining = parsed;
+    }
+    timerPaused = false;
+    els.timerDisplay.classList.remove('done');
+    updateTimerDisplay();
+    timerInterval = setInterval(()=>{
+      timerRemaining -= 1;
+      if(timerRemaining <= 0){
+        timerRemaining = 0;
+        stopTimerInterval();
+        els.timerDisplay.classList.add('done');
+      }
+      updateTimerDisplay();
+    }, 1000);
+  });
+  els.timerPauseBtn.addEventListener('click', ()=>{
+    if(timerInterval){
+      stopTimerInterval();
+      if(timerRemaining > 0) timerPaused = true;
+    }
+  });
+  els.timerResetBtn.addEventListener('click', ()=>{
+    stopTimerInterval();
+    timerPaused = false;
+    const parsed = parseTimerInput(els.timerInput.value);
+    timerRemaining = (parsed && parsed > 0) ? parsed : 0;
+    els.timerDisplay.classList.remove('done');
+    updateTimerDisplay();
+  });
+  els.timerInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') els.timerStartBtn.click(); });
+  updateTimerDisplay();
 
   /* ---------------- init ---------------- */
   loadPersisted();
