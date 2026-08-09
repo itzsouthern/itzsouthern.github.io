@@ -465,6 +465,14 @@
       <input type="range" id="vipRange" min="1" max="10" step="0.1" value="1.3" style="--slider-color:var(--cyan)">
     </div>
     <div class="msg">Mod, VIP, and sub-tier luck don't stack — only the single highest bonus someone qualifies for applies. Follower luck is a base multiplier applied to everyone, on top of which that one bonus is added.</div>
+
+    <details class="help">
+      <summary>Fix a subscriber's tier manually</summary>
+      <p>Twitch's chat badges can't tell us the real paid tier for "Founder" subs (viewers who subscribed early on) — they're always assumed to be Tier 1. If you know someone is actually Tier 2 or 3, list them here, one per line, formatted <b style="color:var(--text);">username=tier</b> (tier is 1, 2, or 3). New entries pick this up automatically — click "Apply now" to fix anyone already in today's pool.</p>
+      <textarea id="tierOverrideArea" rows="3" placeholder="los13nto=2" style="width:100%;background:var(--panel-3);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px;font-family:'Space Mono',monospace;font-size:12.5px;resize:vertical;margin-top:10px;"></textarea>
+      <button class="btn btn-ghost btn-sm" id="applyOverridesBtn" style="margin-top:10px;">Apply now</button>
+      <div class="msg" id="overrideMsg"></div>
+    </details>
   </div>
 
   <!-- 5. TWITCH CONNECTION — very bottom -->
@@ -542,6 +550,7 @@
   /* ---------------- state ---------------- */
   const entries = new Map();      // username -> entry
   const chatLog = new Map();      // username -> [{text, at}]
+  let tierOverrides = new Map();  // username -> manually-set tier (1-3)
   const MAX_CHAT_MSGS_PER_USER = 20;
   const MAX_CHAT_LINES_SHOWN = 200;
   let chatLineCount = 0;
@@ -572,7 +581,8 @@
     channel:'southyy_channel', keyword:'southyy_keyword', avatarProxy:'southyy_avatarProxy',
     history:'southyy_winnerHistory',
     follower:'southyy_luck_follower', t1:'southyy_luck_t1', t2:'southyy_luck_t2',
-    t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip'
+    t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip',
+    tierOverrides:'southyy_tierOverrides'
   };
 
   /* ---------------- element refs ---------------- */
@@ -592,7 +602,8 @@
     winChatName:$('winChatName'), winChatMessages:$('winChatMessages'),
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
     historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
-    chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot')
+    chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot'),
+    tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg')
   };
 
   function escapeHTML(str){
@@ -698,6 +709,44 @@
     return badges.vip !== undefined;
   }
 
+  /* ---------------- tier overrides ---------------- */
+  function parseTierOverridesText(text){
+    const map = new Map();
+    (text || '').split('\n').forEach(line=>{
+      const idx = line.search(/[=:]/);
+      if(idx === -1) return;
+      const username = line.slice(0, idx).trim().toLowerCase().replace(/^@/, '');
+      const tier = parseInt(line.slice(idx+1).trim(), 10);
+      if(!username || isNaN(tier) || tier < 0 || tier > 3) return;
+      map.set(username, tier);
+    });
+    return map;
+  }
+  function effectiveTier(username, tags){
+    return tierOverrides.has(username) ? tierOverrides.get(username) : parseTier(tags);
+  }
+
+  els.tierOverrideArea.addEventListener('input', ()=>{
+    tierOverrides = parseTierOverridesText(els.tierOverrideArea.value);
+    try{ localStorage.setItem(STORAGE_KEYS.tierOverrides, els.tierOverrideArea.value); }catch(err){}
+  });
+  els.applyOverridesBtn.addEventListener('click', ()=>{
+    tierOverrides = parseTierOverridesText(els.tierOverrideArea.value);
+    try{ localStorage.setItem(STORAGE_KEYS.tierOverrides, els.tierOverrideArea.value); }catch(err){}
+    let updated = 0;
+    entries.forEach(e=>{
+      if(tierOverrides.has(e.username) && e.tier !== tierOverrides.get(e.username)){
+        e.tier = tierOverrides.get(e.username);
+        updated++;
+      }
+    });
+    renderEntries();
+    els.overrideMsg.className = 'msg ok';
+    els.overrideMsg.textContent = updated > 0
+      ? `Updated ${updated} ${updated===1?'entry':'entries'} already in the pool.`
+      : `Saved. New entries will use these tiers${entries.size ? ' — nobody currently in the pool needed a change.' : '.'}`;
+  });
+
   /* ---------------- entries ---------------- */
   function addOrUpdateEntry(tags){
     const username = (tags.username || '').toLowerCase();
@@ -705,7 +754,7 @@
     const entry = {
       username,
       displayName: tags['display-name'] || username,
-      tier: parseTier(tags),
+      tier: effectiveTier(username, tags),
       mod: isMod(tags),
       vip: isVip(tags),
       excluded:false,
@@ -1154,6 +1203,11 @@
       if(savedProxy) els.avatarProxy.value = savedProxy;
       const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
       if(savedHistory) winnerHistory = JSON.parse(savedHistory);
+      const savedOverrides = localStorage.getItem(STORAGE_KEYS.tierOverrides);
+      if(savedOverrides){
+        els.tierOverrideArea.value = savedOverrides;
+        tierOverrides = parseTierOverridesText(savedOverrides);
+      }
     }catch(err){
       console.warn('Could not load saved settings:', err);
     }
