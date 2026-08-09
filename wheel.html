@@ -242,6 +242,7 @@
   <div class="status-cluster">
     <span class="count-pill">Entries <b id="headCount">0</b></span>
     <a class="btn btn-ghost btn-sm" href="index.html">← Giveaway reel</a>
+    <a class="btn btn-ghost btn-sm" href="tradelinks.html">🔗 Trade Links</a>
   </div>
 </header>
 
@@ -277,7 +278,7 @@
       <input type="number" id="countInput" min="1" step="1" value="1">
       <button class="btn btn-primary btn-sm" id="addEntryBtn">Add</button>
     </div>
-    <div class="msg">Adding a name that's already on the wheel stacks more entries onto their existing total rather than replacing it. Odds are pure entry-count proportions — no follower/sub/mod/VIP luck bonuses apply here.</div>
+    <div class="msg">Adding a name that's already on the wheel stacks more entries onto their existing total rather than replacing it. Each entry gets its own slice, shuffled to random spots around the wheel — so someone with 25 entries shows up as 25 separate slices scattered around, not one big wedge. Odds are pure entry-count proportions — no follower/sub/mod/VIP luck bonuses apply here.</div>
   </div>
 
   <!-- 3. ENTRANTS -->
@@ -312,7 +313,7 @@
     <div class="winner-rarity" id="winRarity">★ WINNER</div>
     <div class="winner-actions">
       <button class="btn btn-gold btn-sm" id="respinBtn">Respin</button>
-      <button class="btn btn-ghost btn-sm" id="excludeRespinBtn">Remove winner &amp; respin</button>
+      <button class="btn btn-ghost btn-sm" id="excludeRespinBtn">Remove that entry &amp; respin</button>
     </div>
   </div>
 </div>
@@ -328,6 +329,8 @@
   let spinning = false;
   let showingResult = false;
   let currentWinnerUsername = null;
+  let wheelTickets = [];        // one entry per individual ticket, shuffled
+  let currentWinnerTicketIndex = null;
 
   const COLORS = ['#7C3AED','#FF2E9F','#FFC94D','#22E5FF','#3ADE7D','#4B7BFF','#8C4BFF','#E64BC7','#FF4B4B','#ffb627','#2dd4bf','#f472b6'];
 
@@ -381,9 +384,10 @@
   function renderEntries(){
     const list = [...entrants.values()];
     const total = list.reduce((a,e)=>a+e.count, 0);
-    els.entriesGrid.innerHTML = list.map(e=>{
+    els.entriesGrid.innerHTML = list.map((e,i)=>{
       const pct = total > 0 ? ((e.count/total)*100) : 0;
-      return `<div class="chip" role="button" tabindex="0" data-key="${escapeHTML(e.username)}" title="Click to remove">
+      const color = COLORS[i % COLORS.length];
+      return `<div class="chip" role="button" tabindex="0" data-key="${escapeHTML(e.username)}" title="Click to remove" style="--tier-color:${color}">
                 <img src="${escapeHTML(e.avatar)}" alt="" onerror="this.style.visibility='hidden'">
                 <span>${escapeHTML(e.displayName)}</span>
                 <span class="pct">×${e.count} (${pct.toFixed(pct<10?1:0)}%)</span>
@@ -392,7 +396,26 @@
     els.headCount.textContent = list.length;
     els.entryCountPill.innerHTML = `<b>${total}</b> total entries`;
     els.wheelEmpty.style.display = total > 0 ? 'none' : 'flex';
+    rebuildTickets();
     if(!spinning && !showingResult) drawWheel();
+  }
+
+  // Expands each entrant into one object per individual entry, then shuffles
+  // so a person's tickets land scattered around the wheel instead of one
+  // contiguous arc.
+  function rebuildTickets(){
+    const list = [...entrants.values()];
+    const tickets = [];
+    list.forEach((e, colorIndex)=>{
+      for(let i=0;i<e.count;i++){
+        tickets.push({ username:e.username, displayName:e.displayName, avatar:e.avatar, count:e.count, colorIndex });
+      }
+    });
+    for(let i = tickets.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [tickets[i], tickets[j]] = [tickets[j], tickets[i]];
+    }
+    wheelTickets = tickets;
   }
   els.entriesGrid.addEventListener('click', e=>{
     const chip = e.target.closest('.chip');
@@ -422,13 +445,12 @@
   });
 
   /* ---------------- wheel drawing ---------------- */
-  function drawWheel(highlightUsername){
+  function drawWheel(highlightTicketIndex){
     const ctx = els.wheelCanvas.getContext('2d');
     const w = els.wheelCanvas.width, h = els.wheelCanvas.height;
     const cx = w/2, cy = h/2, r = Math.min(cx,cy) - 4;
     ctx.clearRect(0,0,w,h);
-    const list = [...entrants.values()];
-    const total = list.reduce((a,e)=>a+e.count, 0);
+    const total = wheelTickets.length;
     if(total === 0){
       ctx.beginPath();
       ctx.arc(cx,cy,r,0,Math.PI*2);
@@ -439,25 +461,24 @@
       ctx.stroke();
       return;
     }
-    let cumulative = 0;
-    list.forEach((e, i)=>{
-      const startAngle = (cumulative/total) * Math.PI*2;
-      cumulative += e.count;
-      const endAngle = (cumulative/total) * Math.PI*2;
+    const sliceAngle = (Math.PI*2) / total;
+    wheelTickets.forEach((ticket, i)=>{
+      const startAngle = i * sliceAngle;
+      const endAngle = startAngle + sliceAngle;
       ctx.beginPath();
       ctx.moveTo(cx,cy);
       ctx.arc(cx,cy,r,startAngle,endAngle);
       ctx.closePath();
-      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.fillStyle = COLORS[ticket.colorIndex % COLORS.length];
       ctx.fill();
-      const isWinner = highlightUsername && e.username === highlightUsername;
-      ctx.lineWidth = isWinner ? 5 : 1.5;
+      const isWinner = highlightTicketIndex === i;
+      ctx.lineWidth = isWinner ? 5 : (total > 60 ? 0.5 : 1.5);
       ctx.strokeStyle = isWinner ? '#FFC94D' : 'rgba(10,13,20,0.6)';
       ctx.stroke();
 
-      const midAngle = (startAngle+endAngle)/2;
-      const angleSpan = endAngle-startAngle;
+      const angleSpan = sliceAngle;
       if(angleSpan > 0.16){
+        const midAngle = (startAngle+endAngle)/2;
         ctx.save();
         ctx.translate(cx,cy);
         ctx.rotate(midAngle);
@@ -465,7 +486,7 @@
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#0A0D14';
         ctx.font = '700 15px General Sans, sans-serif';
-        const label = e.displayName.length > 14 ? e.displayName.slice(0,13)+'…' : e.displayName;
+        const label = ticket.displayName.length > 14 ? ticket.displayName.slice(0,13)+'…' : ticket.displayName;
         ctx.fillText(label, r - 16, 0);
         ctx.restore();
       }
@@ -480,41 +501,22 @@
   }
 
   /* ---------------- spin ---------------- */
-  function pickWeighted(list){
-    const total = list.reduce((a,e)=>a+e.count, 0);
-    if(total <= 0) return null;
-    let r = Math.random()*total;
-    for(let i=0;i<list.length;i++){
-      r -= list[i].count;
-      if(r <= 0) return list[i];
-    }
-    return list[list.length-1];
-  }
-
   function spinWheel(){
     if(spinning) return;
-    const list = [...entrants.values()];
-    const total = list.reduce((a,e)=>a+e.count, 0);
+    const total = wheelTickets.length;
     if(total === 0) return;
-    const winner = pickWeighted(list);
-    if(!winner) return;
+    const winnerIndex = Math.floor(Math.random() * total);
+    const winner = wheelTickets[winnerIndex];
 
     spinning = true;
     showingResult = false;
     els.spinBtn.disabled = true;
     els.winnerOverlay.classList.remove('show');
 
-    let cumulative = 0, winnerStart = 0, winnerEnd = 0;
-    for(const e of list){
-      const s = cumulative;
-      cumulative += e.count;
-      if(e.username === winner.username){ winnerStart = s; winnerEnd = cumulative; break; }
-    }
-    const startDeg = (winnerStart/total)*360;
-    const endDeg = (winnerEnd/total)*360;
-    const span = endDeg - startDeg;
-    const pad = Math.min(span*0.2, 4);
-    const targetDeg = startDeg + pad + Math.random()*Math.max(0.0001, span - pad*2);
+    const sliceDeg = 360 / total;
+    const startDeg = winnerIndex * sliceDeg;
+    const pad = Math.min(sliceDeg*0.2, 4);
+    const targetDeg = startDeg + pad + Math.random()*Math.max(0.0001, sliceDeg - pad*2);
 
     const neededRotation = ((-90 - targetDeg) % 360 + 360) % 360;
     const extraSpins = 6;
@@ -533,19 +535,20 @@
       });
     });
 
-    setTimeout(()=> onSpinComplete(winner), duration*1000 + 60);
+    setTimeout(()=> onSpinComplete(winner, winnerIndex), duration*1000 + 60);
   }
   els.spinBtn.addEventListener('click', spinWheel);
   els.spinDurationRange.addEventListener('input', ()=>{
     els.spinDurVal.textContent = els.spinDurationRange.value + 's';
   });
 
-  function onSpinComplete(winner){
+  function onSpinComplete(winner, winnerIndex){
     spinning = false;
     showingResult = true;
     els.spinBtn.disabled = false;
     currentWinnerUsername = winner.username;
-    drawWheel(winner.username);
+    currentWinnerTicketIndex = winnerIndex;
+    drawWheel(winnerIndex);
     winnerHistory.unshift({...winner, at:Date.now()});
     renderHistory();
     showWinnerPanel(winner);
@@ -573,8 +576,13 @@
   els.respinBtn.addEventListener('click', spinWheel);
   els.excludeRespinBtn.addEventListener('click', ()=>{
     if(currentWinnerUsername){
-      entrants.delete(currentWinnerUsername);
+      const entrant = entrants.get(currentWinnerUsername);
+      if(entrant){
+        entrant.count -= 1;
+        if(entrant.count <= 0) entrants.delete(currentWinnerUsername);
+      }
       currentWinnerUsername = null;
+      currentWinnerTicketIndex = null;
       renderEntries();
       persistEntrants();
     }

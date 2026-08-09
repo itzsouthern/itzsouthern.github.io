@@ -404,8 +404,10 @@
       <button class="btn btn-ghost btn-sm" id="timerResetBtn">Reset</button>
     </div>
     <span class="count-pill">Entries <b id="headCount">0</b></span>
+    <span class="count-pill" title="Steam trade links captured from chat">Trade links <b id="tradeLinkCount">0</b></span>
     <button class="btn btn-ghost btn-sm" id="soundToggleBtn" title="Toggle roll tick sound">🔊</button>
     <a class="btn btn-ghost btn-sm" href="wheel.html">🎡 Wheel</a>
+    <a class="btn btn-ghost btn-sm" href="tradelinks.html">🔗 Trade Links</a>
     <span class="pill" id="connPill"><span class="dot"></span><span id="connText">Disconnected</span></span>
   </div>
 </header>
@@ -633,7 +635,7 @@
     tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg'),
     timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
     timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
-    soundToggleBtn:$('soundToggleBtn')
+    soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount')
   };
 
   function escapeHTML(str){
@@ -710,6 +712,23 @@
     try{ localStorage.setItem(STORAGE_KEYS.soundEnabled, soundEnabled ? '1' : '0'); }catch(err){}
     if(soundEnabled) playTick();
   });
+
+  /* ---------------- steam trade link capture (shared with tradelinks.html via localStorage) ---------------- */
+  const TRADE_LINK_RE = /https?:\/\/(?:www\.)?steamcommunity\.com\/tradeoffer\/new\/\?partner=\d+&token=[\w-]+/i;
+  const TRADELINKS_KEY = 'southyy_tradelinks';
+  function captureTradeLink(username, displayName, text){
+    const match = text.match(TRADE_LINK_RE);
+    if(!match) return;
+    try{
+      const raw = localStorage.getItem(TRADELINKS_KEY);
+      const store = raw ? JSON.parse(raw) : {};
+      store[username] = { displayName: displayName || username, tradeLink: match[0], capturedAt: Date.now() };
+      localStorage.setItem(TRADELINKS_KEY, JSON.stringify(store));
+      if(els.tradeLinkCount) els.tradeLinkCount.textContent = Object.keys(store).length;
+    }catch(err){
+      console.warn('Could not store trade link:', err);
+    }
+  }
 
   /* ---------------- live chat sidebar ---------------- */
   function recordChatMessage(username, text){
@@ -1250,6 +1269,7 @@
             displayName, color: msg.tags.color, text,
             mod: isModTag, vip: badges.vip !== undefined, sub: badges.subscriber !== undefined
           });
+          captureTradeLink(username, displayName, text);
 
           const words = text.toLowerCase().split(/\s+/);
           if(!words.includes(cfg.keyword)) return;
@@ -1402,6 +1422,10 @@
   loadPersisted();
   renderEntries();
   renderHistory();
+  try{
+    const raw = localStorage.getItem(TRADELINKS_KEY);
+    els.tradeLinkCount.textContent = raw ? Object.keys(JSON.parse(raw)).length : 0;
+  }catch(err){}
 })();
 </script>
 </body>
