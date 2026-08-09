@@ -241,6 +241,7 @@
   </div>
   <div class="status-cluster">
     <span class="count-pill">Entries <b id="headCount">0</b></span>
+    <span class="count-pill" id="syncStatus">Cloud sync: off</span>
     <a class="btn btn-ghost btn-sm" href="index.html">← Giveaway reel</a>
     <a class="btn btn-ghost btn-sm" href="tradelinks.html">🔗 Trade Links</a>
   </div>
@@ -347,7 +348,7 @@
     spinBtn:$('spinBtn'), spinDurationRange:$('spinDurationRange'), spinDurVal:$('spinDurVal'),
     nameInput:$('nameInput'), countInput:$('countInput'), addEntryBtn:$('addEntryBtn'),
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
-    historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
+    historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'), syncStatus:$('syncStatus'),
     winnerOverlay:$('winnerOverlay'), winnerPanel:$('winnerPanel'), winnerCloseBtn:$('winnerCloseBtn'),
     winAvatar:$('winAvatar'), winName:$('winName'), winRarity:$('winRarity'),
     respinBtn:$('respinBtn'), excludeRespinBtn:$('excludeRespinBtn'), confettiLayer:$('confettiLayer')
@@ -358,6 +359,39 @@
   }
   function fallbackAvatar(seed){
     return `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(seed)}`;
+  }
+
+  /* ---------------- cloud sync (reads the Worker URL + key set on the Giveaway reel page) ---------------- */
+  function getSyncConfig(){
+    let baseUrl = '', key = '';
+    try{
+      baseUrl = (localStorage.getItem('southyy_avatarProxy') || '').trim().replace(/\/$/,'');
+      key = localStorage.getItem('southyy_syncKey') || '';
+    }catch(err){}
+    return { baseUrl, key, enabled: !!(baseUrl && key) };
+  }
+  async function syncFetch(path, options){
+    const { baseUrl, key, enabled } = getSyncConfig();
+    if(!enabled) return null;
+    try{
+      const res = await fetch(`${baseUrl}${path}`, Object.assign({}, options, {
+        headers: Object.assign({ 'Content-Type':'application/json', 'X-Api-Key': key }, options && options.headers)
+      }));
+      if(!res.ok) throw new Error('sync status ' + res.status);
+      return await res.json();
+    }catch(err){
+      console.warn('Cloud sync failed:', err);
+      return null;
+    }
+  }
+  async function loadRemoteWinnersOnInit(){
+    const { enabled } = getSyncConfig();
+    els.syncStatus.textContent = enabled ? 'Cloud sync: on' : 'Cloud sync: off (set it up on the Giveaway reel page)';
+    if(!enabled) return;
+    const data = await syncFetch('/winners?type=wheel');
+    if(!data) { els.syncStatus.textContent = 'Cloud sync: error (check the reel page settings)'; return; }
+    winnerHistory = data.history || [];
+    renderHistory();
   }
 
   /* ---------------- entrants ---------------- */
@@ -549,8 +583,10 @@
     currentWinnerUsername = winner.username;
     currentWinnerTicketIndex = winnerIndex;
     drawWheel(winnerIndex);
-    winnerHistory.unshift({...winner, at:Date.now()});
+    const historyEntry = {...winner, at:Date.now()};
+    winnerHistory.unshift(historyEntry);
     renderHistory();
+    syncFetch('/winners?type=wheel', { method:'POST', body: JSON.stringify(historyEntry) });
     showWinnerPanel(winner);
     spawnConfetti();
   }
@@ -616,6 +652,7 @@
     if(!confirm('Clear winner history? This cannot be undone.')) return;
     winnerHistory = [];
     renderHistory();
+    syncFetch('/winners?type=wheel', { method:'DELETE' });
   });
 
   /* ---------------- persistence ---------------- */
@@ -652,6 +689,7 @@
   renderEntries();
   renderHistory();
   drawWheel();
+  loadRemoteWinnersOnInit();
 })();
 </script>
 </body>

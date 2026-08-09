@@ -515,9 +515,13 @@
     <label class="field" for="avatarProxyInput">Avatar proxy URL <span style="color:#525a70">(optional — required for real avatars, see below)</span></label>
     <input type="text" id="avatarProxyInput" placeholder="https://your-worker.workers.dev">
 
+    <label class="field" for="syncKeyInput">Cloud sync key <span style="color:#525a70">(optional — keeps winner history &amp; trade links across devices/restarts, see below)</span></label>
+    <input type="password" id="syncKeyInput" placeholder="Same DATA_KEY you set on the Worker">
+
     <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:16px;">Connect</button>
     <div class="msg" id="connMsg"></div>
     <div class="msg" id="avatarMsg"></div>
+    <div class="msg" id="syncMsg"></div>
     <details class="help">
       <summary>Won't connect — what to check</summary>
       <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.</p>
@@ -526,6 +530,12 @@
     <details class="help">
       <summary>Where do I get an avatar proxy URL?</summary>
       <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, deploy the free, ready-made proxy in <code style="color:var(--text);">avatar-proxy-worker.js</code> (next to this file) to Cloudflare Workers — steps are in a comment at the top of that file, including creating a Twitch app for a Client ID + Client Secret, which live only in the Worker's own settings, never in this page. Paste the *.workers.dev URL it gives you above. The proxy exists because Twitch's own API blocks direct browser requests (CORS) — it can't be called straight from this page.</p>
+    </details>
+
+    <details class="help">
+      <summary>What does the cloud sync key do?</summary>
+      <p>Without it, winner history and trade links only live in this browser's local storage — they're gone if you use a private/incognito tab (wiped when it closes), clear browsing data, or switch devices. Setting a sync key stores that data in your Cloudflare Worker (same one as the avatar proxy above) instead, so it's always there no matter which device or browser you open the site in.</p>
+      <p>Set it up once: on your deployed Worker, add a Secret variable named <code style="color:var(--text);">DATA_KEY</code> with any long random value you make up (steps are in <code style="color:var(--text);">avatar-proxy-worker.js</code>'s comments), then paste that same value here. This key only ever lives in your Worker's settings and in this field's saved value in your own browser — it's never published anywhere on the site itself, so visitors browsing your site can't see or extract it. Wheel and Trade Links pages pick up this same setting automatically.</p>
     </details>
   </div>
 
@@ -611,7 +621,7 @@
     history:'southyy_winnerHistory',
     follower:'southyy_luck_follower', t1:'southyy_luck_t1', t2:'southyy_luck_t2',
     t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip',
-    tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled'
+    tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled', syncKey:'southyy_syncKey'
   };
 
   /* ---------------- element refs ---------------- */
@@ -635,7 +645,8 @@
     tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg'),
     timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
     timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
-    soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount')
+    soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount'),
+    syncKey:$('syncKeyInput'), syncMsg:$('syncMsg')
   };
 
   function escapeHTML(str){
@@ -719,15 +730,51 @@
   function captureTradeLink(username, displayName, text){
     const match = text.match(TRADE_LINK_RE);
     if(!match) return;
+    const entry = { displayName: displayName || username, tradeLink: match[0], capturedAt: Date.now() };
     try{
       const raw = localStorage.getItem(TRADELINKS_KEY);
       const store = raw ? JSON.parse(raw) : {};
-      store[username] = { displayName: displayName || username, tradeLink: match[0], capturedAt: Date.now() };
+      store[username] = entry;
       localStorage.setItem(TRADELINKS_KEY, JSON.stringify(store));
       if(els.tradeLinkCount) els.tradeLinkCount.textContent = Object.keys(store).length;
     }catch(err){
       console.warn('Could not store trade link:', err);
     }
+    syncFetch('/tradelinks', { method:'POST', body: JSON.stringify({ username, ...entry }) });
+  }
+
+  /* ---------------- cloud sync (optional — Worker + KV backed, survives private tabs / PC restarts / device switches) ---------------- */
+  function getSyncConfig(){
+    let baseUrl = '', key = '';
+    try{
+      baseUrl = (localStorage.getItem(STORAGE_KEYS.avatarProxy) || '').trim().replace(/\/$/,'');
+      key = localStorage.getItem(STORAGE_KEYS.syncKey) || '';
+    }catch(err){}
+    return { baseUrl, key, enabled: !!(baseUrl && key) };
+  }
+  async function syncFetch(path, options){
+    const { baseUrl, key, enabled } = getSyncConfig();
+    if(!enabled) return null;
+    try{
+      const res = await fetch(`${baseUrl}${path}`, Object.assign({}, options, {
+        headers: Object.assign({ 'Content-Type':'application/json', 'X-Api-Key': key }, options && options.headers)
+      }));
+      if(!res.ok) throw new Error('sync status ' + res.status);
+      return await res.json();
+    }catch(err){
+      console.warn('Cloud sync failed:', err);
+      if(els.syncMsg){ els.syncMsg.className = 'msg err'; els.syncMsg.textContent = 'Cloud sync failed — check your Worker URL and sync key.'; }
+      return null;
+    }
+  }
+  async function loadRemoteWinnersOnInit(){
+    const { enabled } = getSyncConfig();
+    if(!enabled) return;
+    const data = await syncFetch('/winners?type=reel');
+    if(!data) return;
+    winnerHistory = data.history || [];
+    renderHistory();
+    if(els.syncMsg){ els.syncMsg.className = 'msg ok'; els.syncMsg.textContent = 'Cloud sync connected.'; }
   }
 
   /* ---------------- live chat sidebar ---------------- */
@@ -1047,8 +1094,10 @@
     const slot = els.reelTrack.querySelector('.winner-slot');
     if(slot) slot.classList.add('hit');
     currentWinnerUsername = winner.username;
-    winnerHistory.unshift({...winner, at:Date.now()});
+    const historyEntry = {...winner, at:Date.now()};
+    winnerHistory.unshift(historyEntry);
     renderHistory();
+    syncFetch('/winners?type=reel', { method:'POST', body: JSON.stringify(historyEntry) });
     showWinnerPanel(winner, randomDropType());
     spawnConfetti();
   }
@@ -1097,6 +1146,7 @@
     if(!confirm('Clear winner history? This cannot be undone.')) return;
     winnerHistory = [];
     renderHistory();
+    syncFetch('/winners?type=reel', { method:'DELETE' });
   });
 
   /* ---------------- roll / reroll / exclude buttons ---------------- */
@@ -1323,6 +1373,8 @@
       if(savedChannel) els.channel.value = savedChannel;
       if(savedKeyword) els.keyword.value = savedKeyword;
       if(savedProxy) els.avatarProxy.value = savedProxy;
+      const savedSyncKey = localStorage.getItem(STORAGE_KEYS.syncKey);
+      if(savedSyncKey) els.syncKey.value = savedSyncKey;
       const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
       if(savedHistory) winnerHistory = JSON.parse(savedHistory);
       const savedOverrides = localStorage.getItem(STORAGE_KEYS.tierOverrides);
@@ -1342,6 +1394,7 @@
   els.channel.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.channel, els.channel.value); }catch(err){} });
   els.keyword.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.keyword, els.keyword.value); }catch(err){} });
   els.avatarProxy.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.avatarProxy, els.avatarProxy.value); }catch(err){} });
+  els.syncKey.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.syncKey, els.syncKey.value); }catch(err){} });
 
   let resizeTimer = null;
   window.addEventListener('resize', ()=>{
@@ -1426,6 +1479,7 @@
     const raw = localStorage.getItem(TRADELINKS_KEY);
     els.tradeLinkCount.textContent = raw ? Object.keys(JSON.parse(raw)).length : 0;
   }catch(err){}
+  loadRemoteWinnersOnInit();
 })();
 </script>
 </body>

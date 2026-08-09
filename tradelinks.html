@@ -176,6 +176,7 @@
   </div>
   <div class="status-cluster">
     <span class="count-pill"><b id="countPill">0</b> saved</span>
+    <span class="count-pill" id="syncStatus">Cloud sync: off</span>
     <a class="btn btn-ghost btn-sm" href="index.html">← Giveaway reel</a>
     <a class="btn btn-ghost btn-sm" href="wheel.html">🎡 Wheel</a>
   </div>
@@ -225,11 +226,45 @@
   const $ = id => document.getElementById(id);
   const els = {
     searchInput:$('searchInput'), tlList:$('tlList'), countPill:$('countPill'), clearAllBtn:$('clearAllBtn'),
-    manualName:$('manualName'), manualLink:$('manualLink'), manualAddBtn:$('manualAddBtn'), manualMsg:$('manualMsg')
+    manualName:$('manualName'), manualLink:$('manualLink'), manualAddBtn:$('manualAddBtn'), manualMsg:$('manualMsg'),
+    syncStatus:$('syncStatus')
   };
 
   function escapeHTML(str){
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ---------------- cloud sync (reads the Worker URL + key set on the Giveaway reel page) ---------------- */
+  function getSyncConfig(){
+    let baseUrl = '', key = '';
+    try{
+      baseUrl = (localStorage.getItem('southyy_avatarProxy') || '').trim().replace(/\/$/,'');
+      key = localStorage.getItem('southyy_syncKey') || '';
+    }catch(err){}
+    return { baseUrl, key, enabled: !!(baseUrl && key) };
+  }
+  async function syncFetch(path, options){
+    const { baseUrl, key, enabled } = getSyncConfig();
+    if(!enabled) return null;
+    try{
+      const res = await fetch(`${baseUrl}${path}`, Object.assign({}, options, {
+        headers: Object.assign({ 'Content-Type':'application/json', 'X-Api-Key': key }, options && options.headers)
+      }));
+      if(!res.ok) throw new Error('sync status ' + res.status);
+      return await res.json();
+    }catch(err){
+      console.warn('Cloud sync failed:', err);
+      return null;
+    }
+  }
+  async function loadRemoteOnInit(){
+    const { enabled } = getSyncConfig();
+    els.syncStatus.textContent = enabled ? 'Cloud sync: on' : 'Cloud sync: off (set it up on the Giveaway reel page)';
+    if(!enabled) return;
+    const data = await syncFetch('/tradelinks');
+    if(!data) { els.syncStatus.textContent = 'Cloud sync: error (check the reel page settings)'; return; }
+    saveStore(data.tradelinks || {});
+    render();
   }
 
   function loadStore(){
@@ -308,6 +343,7 @@
       delete store[username];
       saveStore(store);
       render();
+      syncFetch(`/tradelinks?username=${encodeURIComponent(username)}`, { method:'DELETE' });
     }
   });
 
@@ -317,6 +353,7 @@
     if(!confirm('Clear all captured trade links? This cannot be undone.')) return;
     saveStore({});
     render();
+    syncFetch('/tradelinks', { method:'DELETE' });
   });
 
   els.manualAddBtn.addEventListener('click', ()=>{
@@ -335,13 +372,15 @@
     }
     const store = loadStore();
     const username = name.toLowerCase();
-    store[username] = { displayName: name, tradeLink: match[0], capturedAt: Date.now() };
+    const entry = { displayName: name, tradeLink: match[0], capturedAt: Date.now() };
+    store[username] = entry;
     saveStore(store);
     els.manualName.value = '';
     els.manualLink.value = '';
     els.manualMsg.className = 'msg ok';
     els.manualMsg.textContent = `Saved ${name}'s trade link.`;
     render();
+    syncFetch('/tradelinks', { method:'POST', body: JSON.stringify({ username, ...entry }) });
   });
 
   // Pick up captures from the giveaway reel page if it's open in another tab.
@@ -350,6 +389,7 @@
   });
 
   render();
+  loadRemoteOnInit();
 })();
 </script>
 </body>
