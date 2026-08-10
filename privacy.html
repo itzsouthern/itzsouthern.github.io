@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Southyy Giveaways — Privacy Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0D14;
+    --panel:#12161F;
+    --panel-2:#181D2A;
+    --panel-3:#1F2536;
+    --line: rgba(255,255,255,.08);
+    --text:#E9ECF3;
+    --text-dim:#8B93A7;
+    --violet:#7C3AED;
+    --pink:#FF2E9F;
+    --gold:#FFC94D;
+    --cyan:#22E5FF;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'General Sans',sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+    overflow-x:hidden;
+  }
+  .bg-fx{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
+  .bg-image{position:absolute;inset:-2px;background:url('bg-southern.jpg') center top / cover no-repeat;}
+  .bg-image:after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(10,13,20,.55) 0%, rgba(10,13,20,.78) 55%, rgba(10,13,20,.94) 100%);
+  }
+  ::selection{background:var(--violet);color:#fff;}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px;}
+
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 26px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(18,22,31,.9), rgba(18,22,31,.55));
+    backdrop-filter:blur(10px);position:sticky;top:0;z-index:20;gap:16px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand-main{
+    font-family:'General Sans',sans-serif;font-weight:700;font-size:26px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#fff, var(--pink) 60%, var(--gold));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .brand-sub{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
+  a.btn{
+    display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
+    font-family:'General Sans',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    border:none;border-radius:8px;padding:8px 12px;font-size:12px;
+    background:var(--panel-3);color:var(--text);border:1px solid var(--line);
+  }
+  a.btn:hover{border-color:rgba(255,255,255,.25);}
+
+  .page{max-width:760px;margin:0 auto;padding:40px 26px 80px;}
+  .doc{
+    background:linear-gradient(180deg, rgba(18,22,31,.86), rgba(24,29,42,.86));
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:16px;padding:36px;
+  }
+  .doc h1{font-family:'General Sans',sans-serif;font-size:28px;margin:0 0 6px;}
+  .doc .updated{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);margin-bottom:28px;}
+  .doc h2{
+    font-family:'General Sans',sans-serif;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--gold);margin:30px 0 10px;
+  }
+  .doc p, .doc li{font-size:15px;line-height:1.7;color:var(--text);}
+  .doc p{margin:0 0 12px;}
+  .doc ul{margin:0 0 12px;padding-left:22px;}
+  .doc li{margin-bottom:6px;}
+  .doc a{color:var(--cyan);}
+  .doc code{
+    font-family:'Space Mono',monospace;font-size:13px;background:var(--panel-3);
+    padding:2px 6px;border-radius:4px;color:var(--text);
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-fx" aria-hidden="true"><div class="bg-image"></div></div>
+
+<header>
+  <div class="brand">
+    <span class="brand-main">SOUTHYY</span>
+    <span class="brand-sub">Privacy Policy</span>
+  </div>
+  <a class="btn" href="index.html">← Back to site</a>
+</header>
+
+<div class="page">
+  <div class="doc">
+    <h1>Privacy Policy</h1>
+    <div class="updated">Last updated: August 10, 2026 · Currently a free, invite-only beta</div>
+
+    <p>This tool lets Twitch streamers run chat giveaways — an "unboxing" style reel, a manual entry wheel, and a way to capture Steam trade links posted in chat. This page explains what information the tool collects, why, and how it's handled. It's written in plain language on purpose.</p>
+
+    <h2>Who this covers</h2>
+    <p>This policy covers the giveaway tool itself (currently invite-only, in closed beta). If you're a viewer in a streamer's chat, this covers the small amount of chat-derived data described below — you don't have an account here and don't sign in to anything.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>Your Twitch identity, if you're a streamer using the tool:</strong> your Twitch user ID, login name, and profile picture, obtained when you sign in with Twitch. This is how your account is identified — there's no separate password to create or manage.</li>
+      <li><strong>Chat data you choose to capture:</strong> while you're connected to your own channel's chat through this tool, it reads messages to find giveaway entries and Steam trade links, and stores the Twitch username tied to each one. It does not store your full chat log — only what's relevant to running a giveaway (entries and trade links) and, temporarily, a short rolling window of recent messages used to show what the winner said in chat.</li>
+      <li><strong>Content you add yourself:</strong> a display name and background image, if you choose to customize your page, and any names/entries you type in manually.</li>
+      <li><strong>Winner history:</strong> a record of past winners you've rolled, so you can look them up later.</li>
+      <li><strong>Invite codes:</strong> which invite code was used and when, so we can keep the beta limited to invited accounts.</li>
+    </ul>
+    <p>We don't collect passwords (Twitch handles sign-in), payment information (this is currently free), or anything from viewers beyond what's described above.</p>
+
+    <h2>What we don't do</h2>
+    <ul>
+      <li>We don't sell data — yours or your viewers' — to anyone.</li>
+      <li>We don't share it with third parties, except the infrastructure needed to run the service itself: Twitch (for sign-in and public profile data) and Cloudflare (for hosting and storage).</li>
+      <li>We don't use your data for advertising, profiling, or anything unrelated to running the giveaway features you're actively using.</li>
+    </ul>
+
+    <h2>Who can see your data</h2>
+    <p>Only you. Each streamer's giveaway data, trade links, and settings are isolated to their own account — other streamers using this tool can't see your data, and we don't display it publicly anywhere.</p>
+
+    <h2>How long we keep it</h2>
+    <p>We keep your account's data for as long as your account is active. You can ask to have your account and everything tied to it deleted at any time — see contact info below.</p>
+
+    <h2>Trade links specifically</h2>
+    <p>Steam trade links are treated as sensitive by default: they're only ever visible to the streamer whose chat they came from, used solely so that streamer can contact a giveaway winner, and never shared, published, or used for any other purpose.</p>
+
+    <h2>Beta status</h2>
+    <p>This is currently a small, invite-only beta capped at 5 accounts. You need an invite link from the site owner to sign up — existing accounts can always sign back in. Because it's early, features and this policy may change as the tool develops. If anything material changes about how your data is handled, we'll do our best to let you know before it takes effect.</p>
+
+    <h2>Contact</h2>
+    <p>Questions, concerns, or requests to delete your data: <a href="mailto:southernzane@gmail.com">southernzane@gmail.com</a></p>
+  </div>
+</div>
+
+</body>
+</html>

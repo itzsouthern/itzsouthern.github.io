@@ -102,6 +102,28 @@
   }
   .nav-menu a:hover{background:var(--panel-3);}
 
+  /* login gate — blocks the whole app until signed in with Twitch */
+  .login-overlay{
+    position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+    background:rgba(5,6,12,.86);backdrop-filter:blur(6px);padding:20px;
+  }
+  .login-overlay.hide{display:none;}
+  .login-panel{
+    width:100%;max-width:400px;text-align:center;border-radius:16px;padding:34px 28px;
+    background:linear-gradient(135deg, rgba(124,58,237,.25), rgba(255,46,159,.16)), var(--panel);
+    border:1px solid var(--line);box-shadow:0 24px 70px -16px rgba(0,0,0,.7);
+  }
+  .login-brand{
+    font-family:'General Sans',sans-serif;font-weight:700;font-size:28px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#fff, var(--pink) 60%, var(--gold));
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:4px;
+  }
+  .login-brand span{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:3px;color:var(--text-dim);background:none;-webkit-text-fill-color:var(--text-dim);display:block;margin-top:4px;}
+  .login-tag{font-size:13.5px;color:var(--text-dim);line-height:1.6;margin:18px 0 0;}
+  .login-note{font-size:11.5px;color:var(--text-dim);line-height:1.6;margin:16px 0 0;}
+  .login-note a{color:var(--cyan);}
+  #loginErrorMsg:empty{display:none;}
+
   /* ---------- layout ---------- */
   .page-grid{max-width:900px;margin:0 auto;padding:22px 26px 60px;}
   .layout{display:flex;flex-direction:column;gap:20px;}
@@ -138,6 +160,7 @@
   .btn-ghost:hover{border-color:rgba(255,255,255,.25);}
   .btn-gold{background:linear-gradient(90deg,#ffb627,var(--gold));color:#241400;}
   .btn-sm{padding:8px 12px;font-size:12px;border-radius:8px;}
+  .btn-block{width:100%;}
   a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
 
   .msg{font-size:12px;margin-top:10px;color:var(--text-dim);min-height:16px;}
@@ -179,7 +202,7 @@
 <body>
 
 <div class="bg-fx" aria-hidden="true">
-  <div class="bg-image"></div>
+  <div class="bg-image" id="bgImage"></div>
   <div class="bg-grid"></div>
   <span class="orb orb-a"></span>
   <span class="orb orb-b"></span>
@@ -188,7 +211,7 @@
 
 <header>
   <div class="brand">
-    <span class="brand-main">SOUTHYY</span>
+    <span class="brand-main" id="brandMain">SOUTHYY</span>
     <span class="brand-sub">Trade Links</span>
   </div>
   <div class="status-cluster">
@@ -199,10 +222,21 @@
       <div class="nav-menu" id="navMenu">
         <a href="index.html">🎰 Giveaway reel</a>
         <a href="wheel.html">🎡 Giveaway wheel</a>
+        <a href="#" id="logoutMenuItem">🚪 Sign out</a>
       </div>
     </div>
   </div>
 </header>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-panel">
+    <div class="login-brand">SOUTHYY <span>GIVEAWAYS</span></div>
+    <p class="login-tag">Chat giveaways for Twitch streamers — unboxing-style reel, manual wheel, trade link capture, all in your browser.</p>
+    <div class="msg err" id="loginErrorMsg"></div>
+    <button class="btn btn-primary btn-block" id="signInBtn" style="margin-top:10px;">Sign in with Twitch</button>
+    <p class="login-note">This is currently a free, invite-only beta. No password is ever created — signing in with Twitch is the entire login. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+  </div>
+</div>
 
 <div class="page-grid">
 <div class="layout">
@@ -244,47 +278,102 @@
 
   const TRADELINKS_KEY = 'southyy_tradelinks';
   const TRADE_LINK_RE = /https?:\/\/(?:www\.)?steamcommunity\.com\/tradeoffer\/new\/\?partner=\d+&token=[\w-]+/i;
+  const API_BASE = 'https://round-fire-71e6.southernzane.workers.dev';
+  const SESSION_TOKEN_KEY = 'southyy_session_token';
+
+  let me = null;
 
   const $ = id => document.getElementById(id);
   const els = {
     searchInput:$('searchInput'), tlList:$('tlList'), countPill:$('countPill'), clearAllBtn:$('clearAllBtn'),
     manualName:$('manualName'), manualLink:$('manualLink'), manualAddBtn:$('manualAddBtn'), manualMsg:$('manualMsg'),
-    syncStatus:$('syncStatus'), navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu')
+    syncStatus:$('syncStatus'), navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'), logoutMenuItem:$('logoutMenuItem'),
+    loginOverlay:$('loginOverlay'), loginErrorMsg:$('loginErrorMsg'), signInBtn:$('signInBtn'),
+    brandMain:$('brandMain'), bgImage:$('bgImage')
   };
 
   function escapeHTML(str){
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  /* ---------------- cloud sync (reads the Worker URL + key set on the Giveaway reel page) ---------------- */
-  function getSyncConfig(){
-    let baseUrl = '', key = '';
-    try{
-      baseUrl = (localStorage.getItem('southyy_avatarProxy') || '').trim().replace(/\/$/,'');
-      key = localStorage.getItem('southyy_syncKey') || '';
-    }catch(err){}
-    return { baseUrl, key, enabled: !!(baseUrl && key) };
+  /* ---------------- auth + cloud sync ---------------- */
+  function getSessionToken(){
+    try{ return localStorage.getItem(SESSION_TOKEN_KEY) || ''; }catch(err){ return ''; }
   }
-  async function syncFetch(path, options){
-    const { baseUrl, key, enabled } = getSyncConfig();
-    if(!enabled) return null;
+  function setSessionToken(token){
     try{
-      const res = await fetch(`${baseUrl}${path}`, Object.assign({}, options, {
-        headers: Object.assign({ 'Content-Type':'application/json', 'X-Api-Key': key }, options && options.headers)
-      }));
-      if(!res.ok) throw new Error('sync status ' + res.status);
-      return await res.json();
+      if(token) localStorage.setItem(SESSION_TOKEN_KEY, token);
+      else localStorage.removeItem(SESSION_TOKEN_KEY);
+    }catch(err){}
+  }
+  function showLoginGate(){ els.loginOverlay.classList.remove('hide'); }
+  function hideLoginGate(){ els.loginOverlay.classList.add('hide'); }
+  function applyBranding(){
+    if(!me) return;
+    document.title = `${me.displayName} Trade Links`;
+    if(els.brandMain) els.brandMain.textContent = me.displayName.toUpperCase();
+    if(me.backgroundImageUrl && els.bgImage){
+      els.bgImage.style.backgroundImage = `url('${me.backgroundImageUrl}')`;
+    }
+  }
+  const AUTH_ERROR_MESSAGES = {
+    invite_required: "This is invite-only right now — you'll need an invite link from the site owner.",
+    invite_invalid: 'That invite link has already been used or is invalid — ask for a fresh one.',
+    full: 'This beta is full (5 accounts max) — no new sign-ups right now.',
+    invalid_state: 'Sign-in expired before finishing — try again.',
+    token_exchange_failed: 'Twitch sign-in failed — try again in a moment.',
+    profile_fetch_failed: "Couldn't read your Twitch profile — try again.",
+    no_profile: "Couldn't read your Twitch profile — try again.",
+    server_misconfigured: "The site isn't fully set up yet — try again later.",
+  };
+  async function initAuth(){
+    if(location.hash.startsWith('#session=')){
+      setSessionToken(decodeURIComponent(location.hash.slice('#session='.length)));
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    const authError = new URLSearchParams(location.search).get('auth_error');
+    if(authError){
+      els.loginErrorMsg.textContent = AUTH_ERROR_MESSAGES[authError] || 'Sign-in failed — try again.';
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('auth_error');
+      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+    }
+    els.signInBtn.addEventListener('click', ()=>{
+      location.href = `${API_BASE}/auth/login`;
+    });
+    if(!getSessionToken()){ showLoginGate(); return false; }
+    const profile = await syncFetch('/me');
+    if(!profile || profile.error){ showLoginGate(); return false; }
+    me = profile;
+    applyBranding();
+    hideLoginGate();
+    els.syncStatus.textContent = 'Cloud sync: on';
+    return true;
+  }
+  els.logoutMenuItem.addEventListener('click', e=>{
+    e.preventDefault();
+    setSessionToken(null);
+    location.reload();
+  });
+  async function syncFetch(path, options){
+    const token = getSessionToken();
+    if(!token) return null;
+    try{
+      const headers = Object.assign({ 'Authorization': `Bearer ${token}`, 'Content-Type':'application/json' }, options && options.headers);
+      const res = await fetch(`${API_BASE}${path}`, Object.assign({}, options, { headers }));
+      if(res.status === 401){ setSessionToken(null); showLoginGate(); return null; }
+      let data = null;
+      try{ data = await res.json(); }catch(err){}
+      if(!res.ok) return data || { error: 'Request failed (' + res.status + ')' };
+      return data;
     }catch(err){
       console.warn('Cloud sync failed:', err);
       return null;
     }
   }
   async function loadRemoteOnInit(){
-    const { enabled } = getSyncConfig();
-    els.syncStatus.textContent = enabled ? 'Cloud sync: on' : 'Cloud sync: off (set it up on the Giveaway reel page)';
-    if(!enabled) return;
     const data = await syncFetch('/tradelinks');
-    if(!data) { els.syncStatus.textContent = 'Cloud sync: error (check the reel page settings)'; return; }
+    if(!data) return;
     saveStore(data.tradelinks || {});
     render();
   }
@@ -424,7 +513,12 @@
   });
 
   render();
-  loadRemoteOnInit();
+
+  (async ()=>{
+    const authed = await initAuth();
+    if(!authed) return;
+    await loadRemoteOnInit();
+  })();
 })();
 </script>
 </body>

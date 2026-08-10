@@ -340,6 +340,28 @@
   }
   .connect-close:hover{color:var(--text);}
 
+  /* login gate — blocks the whole app until signed in with Twitch */
+  .login-overlay{
+    position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+    background:rgba(5,6,12,.86);backdrop-filter:blur(6px);padding:20px;
+  }
+  .login-overlay.hide{display:none;}
+  .login-panel{
+    width:100%;max-width:400px;text-align:center;border-radius:16px;padding:34px 28px;
+    background:linear-gradient(135deg, rgba(124,58,237,.25), rgba(255,46,159,.16)), var(--panel);
+    border:1px solid var(--line);box-shadow:0 24px 70px -16px rgba(0,0,0,.7);
+  }
+  .login-brand{
+    font-family:'General Sans',sans-serif;font-weight:700;font-size:28px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#fff, var(--pink) 60%, var(--gold));
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:4px;
+  }
+  .login-brand span{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:3px;color:var(--text-dim);background:none;-webkit-text-fill-color:var(--text-dim);display:block;margin-top:4px;}
+  .login-tag{font-size:13.5px;color:var(--text-dim);line-height:1.6;margin:18px 0 0;}
+  .login-note{font-size:11.5px;color:var(--text-dim);line-height:1.6;margin:16px 0 0;}
+  .login-note a{color:var(--cyan);}
+  #loginErrorMsg:empty{display:none;}
+
   /* winner popout */
   .winner-overlay{
     position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
@@ -424,7 +446,7 @@
 <body>
 
 <div class="bg-fx" aria-hidden="true">
-  <div class="bg-image"></div>
+  <div class="bg-image" id="bgImage"></div>
   <div class="bg-grid"></div>
   <span class="orb orb-a"></span>
   <span class="orb orb-b"></span>
@@ -434,7 +456,7 @@
 
 <header>
   <div class="brand">
-    <span class="brand-main">SOUTHYY</span>
+    <span class="brand-main" id="brandMain">SOUTHYY</span>
     <span class="brand-sub">Giveaways</span>
   </div>
   <div class="status-cluster">
@@ -453,6 +475,9 @@
       <div class="nav-menu" id="navMenu">
         <a href="wheel.html">🎡 Giveaway wheel</a>
         <a href="tradelinks.html">🔗 Trade links</a>
+        <a href="#" id="customizeMenuItem">🎨 Customize</a>
+        <a href="#" id="invitesMenuItem" style="display:none;">🔑 Invites</a>
+        <a href="#" id="logoutMenuItem">🚪 Log out</a>
       </div>
     </div>
     <span class="pill" id="connPill" role="button" tabindex="0" title="Connect to chat"><span class="dot"></span><span id="connText">Disconnected</span></span>
@@ -600,32 +625,50 @@
     <label class="field" for="keywordInput">Entry keyword</label>
     <input type="text" id="keywordInput" placeholder="!enter" value="!enter">
 
-    <label class="field" for="avatarProxyInput">Avatar proxy URL <span style="color:#525a70">(optional — required for real avatars, see below)</span></label>
-    <input type="text" id="avatarProxyInput" placeholder="https://your-worker.workers.dev">
-
-    <label class="field" for="syncKeyInput">Cloud sync key <span style="color:#525a70">(optional — keeps winner history &amp; trade links across devices/restarts, see below)</span></label>
-    <input type="password" id="syncKeyInput" placeholder="Same DATA_KEY you set on the Worker">
-
     <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:16px;">Connect</button>
     <div class="msg">Once connected, refreshing this page keeps you connected automatically — no need to click Connect again until you actually close the browser.</div>
     <div class="msg" id="connMsg"></div>
     <div class="msg" id="avatarMsg"></div>
-    <div class="msg" id="syncMsg"></div>
     <details class="help">
       <summary>Won't connect — what to check</summary>
       <p>This connects with a direct link to Twitch's own chat servers — no outside library required, so it works the moment the page loads. If a channel still won't connect: double-check the spelling of the username (not display name — the exact login, lowercase, no spaces), confirm the channel exists and isn't banned/suspended, and check that your network doesn't block WebSocket connections (some school/corporate networks do — try a phone hotspot to confirm). Press F12 → Console for the exact error if it keeps failing.</p>
     </details>
+  </div>
+</div>
 
-    <details class="help">
-      <summary>Where do I get an avatar proxy URL?</summary>
-      <p>Chat entries work with just a channel name — no login needed. To pull real profile pictures instead of generated avatars, deploy the free, ready-made proxy in <code style="color:var(--text);">avatar-proxy-worker.js</code> (next to this file) to Cloudflare Workers — steps are in a comment at the top of that file, including creating a Twitch app for a Client ID + Client Secret, which live only in the Worker's own settings, never in this page. Paste the *.workers.dev URL it gives you above. The proxy exists because Twitch's own API blocks direct browser requests (CORS) — it can't be called straight from this page.</p>
-    </details>
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-panel">
+    <div class="login-brand">SOUTHYY <span>GIVEAWAYS</span></div>
+    <p class="login-tag">Chat giveaways for Twitch streamers — unboxing-style reel, manual wheel, trade link capture, all in your browser.</p>
+    <div class="msg err" id="loginErrorMsg"></div>
+    <button class="btn btn-primary btn-block" id="signInBtn" style="margin-top:10px;">Sign in with Twitch</button>
+    <p class="login-note">This is currently a free, invite-only beta. No password is ever created — signing in with Twitch is the entire login. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+  </div>
+</div>
 
-    <details class="help">
-      <summary>What does the cloud sync key do?</summary>
-      <p>Without it, winner history and trade links only live in this browser's local storage — they're gone if you use a private/incognito tab (wiped when it closes), clear browsing data, or switch devices. Setting a sync key stores that data in your Cloudflare Worker (same one as the avatar proxy above) instead, so it's always there no matter which device or browser you open the site in.</p>
-      <p>Set it up once: on your deployed Worker, add a Secret variable named <code style="color:var(--text);">DATA_KEY</code> with any long random value you make up (steps are in <code style="color:var(--text);">avatar-proxy-worker.js</code>'s comments), then paste that same value here. This key only ever lives in your Worker's settings and in this field's saved value in your own browser — it's never published anywhere on the site itself, so visitors browsing your site can't see or extract it. Wheel and Trade Links pages pick up this same setting automatically.</p>
-    </details>
+<div class="connect-overlay" id="customizeOverlay">
+  <div class="connect-panel">
+    <button class="connect-close" id="customizeCloseBtn" aria-label="Close">✕</button>
+    <h2><span class="bar"></span>Customize your page</h2>
+    <label class="field" for="displayNameInput">Display name <span style="color:#525a70">(shown as "[name] Giveaways")</span></label>
+    <input type="text" id="displayNameInput" placeholder="Your name" maxlength="40">
+
+    <label class="field" for="bgFileInput">Background image <span style="color:#525a70">(optional — JPG/PNG/WEBP, 5MB max)</span></label>
+    <input type="file" id="bgFileInput" accept="image/jpeg,image/png,image/webp">
+
+    <button class="btn btn-primary btn-block" id="saveCustomizeBtn" style="margin-top:16px;">Save</button>
+    <div class="msg" id="customizeMsg"></div>
+  </div>
+</div>
+
+<div class="connect-overlay" id="invitesOverlay">
+  <div class="connect-panel">
+    <button class="connect-close" id="invitesCloseBtn" aria-label="Close">✕</button>
+    <h2><span class="bar"></span>Invites</h2>
+    <div class="msg">This beta is capped at 5 total accounts (including yours). Generate a code and send the link it gives you to a friend.</div>
+    <button class="btn btn-primary btn-block" id="generateInviteBtn" style="margin-top:10px;">Generate invite</button>
+    <div class="msg" id="invitesMsg"></div>
+    <div id="invitesList" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
@@ -654,8 +697,12 @@
   let avatarQueue = [];
   let flushScheduled = false;
 
+  // Single shared backend for every streamer on the site — not something an
+  // individual user configures, unlike the old per-user avatar-proxy field.
+  const API_BASE = 'https://round-fire-71e6.southernzane.workers.dev';
+
   const cfg = {
-    channel:'', avatarProxy:'', keyword:'!enter',
+    channel:'', keyword:'!enter',
     follower:1.0, t1:1.2, t2:1.5, t3:2.0, mod:1.5, vip:1.3
   };
 
@@ -667,11 +714,12 @@
   const IDLE_SCROLL_SPEED = 34; // px/sec, ambient pre-roll scroll
 
   const STORAGE_KEYS = {
-    channel:'southyy_channel', keyword:'southyy_keyword', avatarProxy:'southyy_avatarProxy',
+    channel:'southyy_channel', keyword:'southyy_keyword',
     history:'southyy_winnerHistory',
     follower:'southyy_luck_follower', t1:'southyy_luck_t1', t2:'southyy_luck_t2',
     t3:'southyy_luck_t3', mod:'southyy_luck_mod', vip:'southyy_luck_vip',
-    tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled', syncKey:'southyy_syncKey'
+    tierOverrides:'southyy_tierOverrides', soundEnabled:'southyy_soundEnabled',
+    sessionToken:'southyy_session_token'
   };
 
   // sessionStorage (not localStorage) on purpose: survives page refreshes but
@@ -679,11 +727,14 @@
   // connected without re-clicking Connect, while closing out requires it again.
   const SESSION_KEYS = { wasConnected:'southyy_wasConnected' };
 
+  let me = null; // the signed-in streamer's profile, set once /me resolves
+
   /* ---------------- element refs ---------------- */
   const $ = id => document.getElementById(id);
   const els = {
-    channel:$('channelInput'), keyword:$('keywordInput'), avatarProxy:$('avatarProxyInput'),
+    channel:$('channelInput'), keyword:$('keywordInput'),
     connectBtn:$('connectBtn'), connMsg:$('connMsg'), connPill:$('connPill'), connText:$('connText'), avatarMsg:$('avatarMsg'),
+    loginOverlay:$('loginOverlay'), signInBtn:$('signInBtn'), loginErrorMsg:$('loginErrorMsg'),
     headCount:$('headCount'),
     t1:$('t1Range'), t2:$('t2Range'), t3:$('t3Range'), mod:$('modRange'), vip:$('vipRange'), follower:$('followerRange'),
     t1Val:$('t1Val'), t2Val:$('t2Val'), t3Val:$('t3Val'), modVal:$('modVal'), vipVal:$('vipVal'), followerVal:$('followerVal'),
@@ -701,9 +752,14 @@
     timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
     timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
     soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount'),
-    syncKey:$('syncKeyInput'), syncMsg:$('syncMsg'),
-    navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'),
-    connectOverlay:$('connectOverlay'), connectPanel:$('connectPanel'), connectCloseBtn:$('connectCloseBtn')
+    navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'), invitesMenuItem:$('invitesMenuItem'),
+    customizeMenuItem:$('customizeMenuItem'), logoutMenuItem:$('logoutMenuItem'),
+    connectOverlay:$('connectOverlay'), connectPanel:$('connectPanel'), connectCloseBtn:$('connectCloseBtn'),
+    customizeOverlay:$('customizeOverlay'), customizeCloseBtn:$('customizeCloseBtn'),
+    displayNameInput:$('displayNameInput'), bgFileInput:$('bgFileInput'), saveCustomizeBtn:$('saveCustomizeBtn'), customizeMsg:$('customizeMsg'),
+    invitesOverlay:$('invitesOverlay'), invitesCloseBtn:$('invitesCloseBtn'),
+    generateInviteBtn:$('generateInviteBtn'), invitesList:$('invitesList'), invitesMsg:$('invitesMsg'),
+    brandMain:$('brandMain'), bgImage:$('bgImage')
   };
 
   function escapeHTML(str){
@@ -809,6 +865,90 @@
     if(e.key === 'Escape') closeConnectModal();
   });
 
+  /* ---------------- customize (display name + background) ---------------- */
+  els.customizeMenuItem.addEventListener('click', e=>{
+    e.preventDefault();
+    els.navMenu.classList.remove('show');
+    els.customizeMsg.textContent = '';
+    els.customizeOverlay.classList.add('show');
+  });
+  els.customizeCloseBtn.addEventListener('click', ()=> els.customizeOverlay.classList.remove('show'));
+  els.customizeOverlay.addEventListener('click', e=>{
+    if(e.target === els.customizeOverlay) els.customizeOverlay.classList.remove('show');
+  });
+  els.saveCustomizeBtn.addEventListener('click', async ()=>{
+    els.saveCustomizeBtn.disabled = true;
+    els.customizeMsg.className = 'msg';
+    els.customizeMsg.textContent = 'Saving…';
+    try{
+      const name = els.displayNameInput.value.trim();
+      if(name){
+        const res = await syncFetch('/me/settings', { method:'POST', body: JSON.stringify({ displayName: name }) });
+        if(!res || res.error) throw new Error(res && res.error || 'Could not save display name');
+      }
+      const file = els.bgFileInput.files[0];
+      if(file){
+        const buf = await file.arrayBuffer();
+        const res = await syncFetch('/me/background', { method:'POST', headers:{ 'Content-Type': file.type }, body: buf });
+        if(!res || res.error) throw new Error(res && res.error || 'Could not upload background');
+      }
+      const profile = await syncFetch('/me');
+      if(profile && !profile.error){ me = profile; applyBranding(); }
+      els.customizeMsg.className = 'msg ok';
+      els.customizeMsg.textContent = 'Saved.';
+      els.bgFileInput.value = '';
+    }catch(err){
+      els.customizeMsg.className = 'msg err';
+      els.customizeMsg.textContent = err.message || 'Something went wrong saving that.';
+    }
+    els.saveCustomizeBtn.disabled = false;
+  });
+
+  /* ---------------- invites (owner only) ---------------- */
+  function renderInvites(data){
+    const pending = (data.invites || []).filter(i=>!i.used_by);
+    const used = (data.invites || []).filter(i=>i.used_by);
+    els.invitesList.innerHTML = [
+      `<div class="msg" style="margin-top:0;">${data.accountCount}/${data.maxAccounts} accounts used.</div>`,
+      ...pending.map(i=>`<div class="chip" style="border-radius:10px;"><span>${escapeHTML(i.code)}</span></div>`),
+      ...used.map(i=>`<div class="chip" style="border-radius:10px;opacity:.5;"><span>${escapeHTML(i.code)} — used</span></div>`),
+    ].join('');
+  }
+  els.invitesMenuItem.addEventListener('click', async e=>{
+    e.preventDefault();
+    els.navMenu.classList.remove('show');
+    els.invitesMsg.textContent = '';
+    els.invitesOverlay.classList.add('show');
+    const data = await syncFetch('/admin/invites');
+    if(data && !data.error) renderInvites(data);
+  });
+  els.invitesCloseBtn.addEventListener('click', ()=> els.invitesOverlay.classList.remove('show'));
+  els.invitesOverlay.addEventListener('click', e=>{
+    if(e.target === els.invitesOverlay) els.invitesOverlay.classList.remove('show');
+  });
+  els.generateInviteBtn.addEventListener('click', async ()=>{
+    els.generateInviteBtn.disabled = true;
+    const res = await syncFetch('/admin/invites', { method:'POST' });
+    if(res && res.inviteUrl){
+      els.invitesMsg.className = 'msg ok';
+      els.invitesMsg.textContent = `New invite: ${res.inviteUrl}`;
+      try{ await navigator.clipboard.writeText(res.inviteUrl); els.invitesMsg.textContent += ' (copied)'; }catch(err){}
+    }else{
+      els.invitesMsg.className = 'msg err';
+      els.invitesMsg.textContent = (res && res.error) || 'Could not generate an invite.';
+    }
+    const data = await syncFetch('/admin/invites');
+    if(data && !data.error) renderInvites(data);
+    els.generateInviteBtn.disabled = false;
+  });
+
+  /* ---------------- log out ---------------- */
+  els.logoutMenuItem.addEventListener('click', e=>{
+    e.preventDefault();
+    setSessionToken(null);
+    location.reload();
+  });
+
   /* ---------------- steam trade link capture (shared with tradelinks.html via localStorage) ---------------- */
   const TRADE_LINK_RE = /https?:\/\/(?:www\.)?steamcommunity\.com\/tradeoffer\/new\/\?partner=\d+&token=[\w-]+/i;
   const TRADELINKS_KEY = 'southyy_tradelinks';
@@ -828,38 +968,96 @@
     syncFetch('/tradelinks', { method:'POST', body: JSON.stringify({ username, ...entry }) });
   }
 
-  /* ---------------- cloud sync (optional — Worker + KV backed, survives private tabs / PC restarts / device switches) ---------------- */
-  function getSyncConfig(){
-    let baseUrl = '', key = '';
+  /* ---------------- auth + cloud sync (Worker + D1 + KV + R2 backed) ---------------- */
+  function getSessionToken(){
+    try{ return localStorage.getItem(STORAGE_KEYS.sessionToken) || ''; }catch(err){ return ''; }
+  }
+  function setSessionToken(token){
     try{
-      baseUrl = (localStorage.getItem(STORAGE_KEYS.avatarProxy) || '').trim().replace(/\/$/,'');
-      key = localStorage.getItem(STORAGE_KEYS.syncKey) || '';
+      if(token) localStorage.setItem(STORAGE_KEYS.sessionToken, token);
+      else localStorage.removeItem(STORAGE_KEYS.sessionToken);
     }catch(err){}
-    return { baseUrl, key, enabled: !!(baseUrl && key) };
   }
   async function syncFetch(path, options){
-    const { baseUrl, key, enabled } = getSyncConfig();
-    if(!enabled) return null;
+    const token = getSessionToken();
+    if(!token) return null;
     try{
-      const res = await fetch(`${baseUrl}${path}`, Object.assign({}, options, {
-        headers: Object.assign({ 'Content-Type':'application/json', 'X-Api-Key': key }, options && options.headers)
-      }));
-      if(!res.ok) throw new Error('sync status ' + res.status);
-      return await res.json();
+      const headers = Object.assign({ 'Authorization': `Bearer ${token}` }, options && options.headers);
+      if(!(options && options.body instanceof ArrayBuffer) && !(headers['Content-Type'])){
+        headers['Content-Type'] = 'application/json';
+      }
+      const res = await fetch(`${API_BASE}${path}`, Object.assign({}, options, { headers }));
+      if(res.status === 401){ setSessionToken(null); showLoginGate(); return null; }
+      let data = null;
+      try{ data = await res.json(); }catch(err){}
+      if(!res.ok) return data || { error: 'Request failed (' + res.status + ')' };
+      return data;
     }catch(err){
       console.warn('Cloud sync failed:', err);
-      if(els.syncMsg){ els.syncMsg.className = 'msg err'; els.syncMsg.textContent = 'Cloud sync failed — check your Worker URL and sync key.'; }
       return null;
     }
   }
   async function loadRemoteWinnersOnInit(){
-    const { enabled } = getSyncConfig();
-    if(!enabled) return;
     const data = await syncFetch('/winners?type=reel');
     if(!data) return;
     winnerHistory = data.history || [];
     renderHistory();
-    if(els.syncMsg){ els.syncMsg.className = 'msg ok'; els.syncMsg.textContent = 'Cloud sync connected.'; }
+  }
+
+  function showLoginGate(){
+    els.loginOverlay.classList.remove('hide');
+  }
+  function hideLoginGate(){
+    els.loginOverlay.classList.add('hide');
+  }
+  function applyBranding(){
+    if(!me) return;
+    document.title = `${me.displayName} Giveaways`;
+    if(els.brandMain) els.brandMain.textContent = me.displayName.toUpperCase();
+    if(me.backgroundImageUrl && els.bgImage){
+      els.bgImage.style.backgroundImage = `url('${me.backgroundImageUrl}')`;
+    }
+    if(els.invitesMenuItem) els.invitesMenuItem.style.display = me.isOwner ? '' : 'none';
+    if(els.displayNameInput) els.displayNameInput.value = me.displayName;
+    if(els.channel && !els.channel.value.trim()) els.channel.value = me.login;
+  }
+  const AUTH_ERROR_MESSAGES = {
+    invite_required: "This is invite-only right now — you'll need an invite link from the site owner.",
+    invite_invalid: 'That invite link has already been used or is invalid — ask for a fresh one.',
+    full: 'This beta is full (5 accounts max) — no new sign-ups right now.',
+    invalid_state: 'Sign-in expired before finishing — try again.',
+    token_exchange_failed: 'Twitch sign-in failed — try again in a moment.',
+    profile_fetch_failed: "Couldn't read your Twitch profile — try again.",
+    no_profile: "Couldn't read your Twitch profile — try again.",
+    server_misconfigured: "The site isn't fully set up yet — try again later.",
+  };
+  async function initAuth(){
+    // Pick up a freshly-issued token delivered in the URL fragment after the
+    // Twitch OAuth redirect, then scrub it from the visible URL.
+    if(location.hash.startsWith('#session=')){
+      setSessionToken(decodeURIComponent(location.hash.slice('#session='.length)));
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    const authError = new URLSearchParams(location.search).get('auth_error');
+    if(authError){
+      els.loginErrorMsg.textContent = AUTH_ERROR_MESSAGES[authError] || 'Sign-in failed — try again.';
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('auth_error');
+      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+    }
+
+    const invite = new URLSearchParams(location.search).get('invite') || '';
+    els.signInBtn.addEventListener('click', ()=>{
+      location.href = `${API_BASE}/auth/login${invite ? '?invite=' + encodeURIComponent(invite) : ''}`;
+    });
+
+    if(!getSessionToken()){ showLoginGate(); return false; }
+    const profile = await syncFetch('/me');
+    if(!profile || profile.error){ showLoginGate(); return false; }
+    me = profile;
+    applyBranding();
+    hideLoginGate();
+    return true;
   }
 
   /* ---------------- live chat sidebar ---------------- */
@@ -904,7 +1102,6 @@
     return `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${encodeURIComponent(username)}`;
   }
   function queueAvatarFetch(username){
-    if(!cfg.avatarProxy) return;
     avatarQueue.push(username);
     if(!flushScheduled){
       flushScheduled = true;
@@ -917,7 +1114,7 @@
     if(batch.length === 0) return;
     const params = batch.map(u => `login=${encodeURIComponent(u)}`).join('&');
     try{
-      const res = await fetch(`${cfg.avatarProxy}/users?${params}`);
+      const res = await fetch(`${API_BASE}/users?${params}`);
       if(!res.ok) throw new Error('proxy status ' + res.status);
       const data = await res.json();
       (data.data || []).forEach(u=>{
@@ -930,7 +1127,7 @@
     }catch(err){
       console.warn('Avatar fetch failed, keeping generated avatars:', err);
       els.avatarMsg.className = 'msg err';
-      els.avatarMsg.textContent = 'Real avatars aren\'t loading — check your avatar proxy URL, Client ID, and token.';
+      els.avatarMsg.textContent = 'Real avatars aren\'t loading right now — generated ones are being used instead.';
     }
     if(avatarQueue.length > 0) setTimeout(flushAvatarQueue, 1200);
   }
@@ -1446,7 +1643,6 @@
     const channel = els.channel.value.trim().replace(/^#/, '').toLowerCase();
     if(!channel){ flashConnMsg('Enter a channel name first.', true); return; }
     cfg.channel = channel;
-    cfg.avatarProxy = els.avatarProxy.value.trim().replace(/\/$/,'');
     cfg.keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
     connectToChannel(channel);
   }
@@ -1457,12 +1653,8 @@
     try{
       const savedChannel = localStorage.getItem(STORAGE_KEYS.channel);
       const savedKeyword = localStorage.getItem(STORAGE_KEYS.keyword);
-      const savedProxy = localStorage.getItem(STORAGE_KEYS.avatarProxy);
       if(savedChannel) els.channel.value = savedChannel;
       if(savedKeyword) els.keyword.value = savedKeyword;
-      if(savedProxy) els.avatarProxy.value = savedProxy;
-      const savedSyncKey = localStorage.getItem(STORAGE_KEYS.syncKey);
-      if(savedSyncKey) els.syncKey.value = savedSyncKey;
       const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
       if(savedHistory) winnerHistory = JSON.parse(savedHistory);
       const savedOverrides = localStorage.getItem(STORAGE_KEYS.tierOverrides);
@@ -1481,8 +1673,6 @@
   }
   els.channel.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.channel, els.channel.value); }catch(err){} });
   els.keyword.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.keyword, els.keyword.value); }catch(err){} });
-  els.avatarProxy.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.avatarProxy, els.avatarProxy.value); }catch(err){} });
-  els.syncKey.addEventListener('input', ()=>{ try{ localStorage.setItem(STORAGE_KEYS.syncKey, els.syncKey.value); }catch(err){} });
 
   let resizeTimer = null;
   window.addEventListener('resize', ()=>{
@@ -1567,16 +1757,22 @@
     const raw = localStorage.getItem(TRADELINKS_KEY);
     els.tradeLinkCount.textContent = raw ? Object.keys(JSON.parse(raw)).length : 0;
   }catch(err){}
-  loadRemoteWinnersOnInit();
 
-  let autoReconnecting = false;
-  try{
-    if(sessionStorage.getItem(SESSION_KEYS.wasConnected) === '1' && els.channel.value.trim()){
-      autoReconnecting = true;
-      attemptConnect();
-    }
-  }catch(err){}
-  if(!autoReconnecting) openConnectModal();
+  (async ()=>{
+    const authed = await initAuth();
+    if(!authed) return; // login gate is showing; nothing below needs to run yet
+
+    await loadRemoteWinnersOnInit();
+
+    let autoReconnecting = false;
+    try{
+      if(sessionStorage.getItem(SESSION_KEYS.wasConnected) === '1' && els.channel.value.trim()){
+        autoReconnecting = true;
+        attemptConnect();
+      }
+    }catch(err){}
+    if(!autoReconnecting) openConnectModal();
+  })();
 })();
 </script>
 </body>
