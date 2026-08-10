@@ -631,8 +631,16 @@
       ctx.strokeStyle = isWinner ? '#FFC94D' : 'rgba(10,13,20,0.6)';
       ctx.stroke();
 
+      // Labels shrink continuously as slices narrow instead of just vanishing
+      // past a fixed cutoff — full size down to FULL_SIZE_ANGLE (unchanged
+      // from before), then scales down to MIN_FONT by MIN_DRAW_ANGLE, below
+      // which there's truly no room left for even one character.
       const angleSpan = sliceAngle;
-      if(angleSpan > 0.16){
+      const FULL_SIZE_ANGLE = 0.16, MIN_DRAW_ANGLE = 0.02;
+      const MAX_FONT = 15, MIN_FONT = 6;
+      if(angleSpan > MIN_DRAW_ANGLE){
+        const t = Math.min(1, Math.max(0, (angleSpan - MIN_DRAW_ANGLE) / (FULL_SIZE_ANGLE - MIN_DRAW_ANGLE)));
+        const fontSize = MIN_FONT + t * (MAX_FONT - MIN_FONT);
         const midAngle = (startAngle+endAngle)/2;
         ctx.save();
         ctx.translate(cx,cy);
@@ -640,9 +648,18 @@
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#0A0D14';
-        ctx.font = '700 15px General Sans, sans-serif';
-        const label = ticket.displayName.length > 14 ? ticket.displayName.slice(0,13)+'…' : ticket.displayName;
-        ctx.fillText(label, r - 16, 0);
+        ctx.font = `700 ${fontSize.toFixed(2)}px General Sans, sans-serif`;
+        const availableWidth = (r - 16) - 28; // leave clearance before the center hub
+        if(availableWidth > fontSize * 0.55){
+          let label = ticket.displayName;
+          if(ctx.measureText(label).width > availableWidth){
+            while(label.length > 1 && ctx.measureText(label + '…').width > availableWidth){
+              label = label.slice(0, -1);
+            }
+            label += '…';
+          }
+          ctx.fillText(label, r - 16, 0);
+        }
         ctx.restore();
       }
     });
