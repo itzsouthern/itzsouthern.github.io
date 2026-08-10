@@ -143,21 +143,32 @@
   }
   .nav-menu a:hover{background:var(--panel-3);}
   .timer-widget{
-    display:flex;align-items:center;gap:8px;
-    padding:6px 8px 6px 13px;border-radius:999px;
+    display:flex;align-items:center;gap:7px;
+    padding:6px 7px 6px 12px;border-radius:999px;
     background:var(--panel-2);border:1px solid var(--line);
   }
-  .timer-display{
-    font-family:'Space Mono',monospace;font-size:14px;font-weight:700;
-    color:var(--text);min-width:52px;text-align:center;
+  .timer-icon{font-size:12px;opacity:.55;}
+  .timer-widget input[type=text].timer-box{
+    width:62px;background:transparent;border:none;outline:none;margin:0;
+    font-family:'Space Mono',monospace;font-size:15px;font-weight:700;
+    color:var(--text);text-align:center;padding:3px 0;
+    border-bottom:1px solid transparent;
   }
-  .timer-display.done{color:var(--red);animation:timerPulse 1s ease-in-out infinite;}
+  .timer-widget input[type=text].timer-box:not([readonly]){border-bottom:1px dashed rgba(255,255,255,.28);cursor:text;}
+  .timer-widget input[type=text].timer-box:not([readonly]):hover{border-bottom-color:rgba(255,255,255,.55);}
+  .timer-widget input[type=text].timer-box:not([readonly]):focus{border-bottom-style:solid;border-bottom-color:var(--cyan);}
+  .timer-widget input[type=text].timer-box.paused{color:var(--gold);}
+  .timer-widget input[type=text].timer-box.done{color:var(--red);animation:timerPulse 1s ease-in-out infinite;}
   @keyframes timerPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
-  .timer-input{
-    width:60px;background:var(--panel-3);border:1px solid var(--line);color:var(--text);
-    padding:5px 7px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;text-align:center;
+  .timer-btn{
+    display:flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:50%;padding:0;line-height:1;
+    background:var(--panel-3);border:1px solid var(--line);color:var(--text);
+    font-size:11px;cursor:pointer;
+    transition:transform .12s ease, border-color .12s ease;
   }
-  .timer-widget .btn-sm{padding:6px 10px;font-size:11px;}
+  .timer-btn:hover{border-color:rgba(255,255,255,.3);transform:translateY(-1px);}
+  .timer-btn:active{transform:translateY(0);}
 
   /* ---------- layout ---------- */
   .page-grid{
@@ -479,11 +490,10 @@
   </div>
   <div class="status-cluster">
     <div class="timer-widget" id="timerWidget">
-      <span class="timer-display" id="timerDisplay">05:00</span>
-      <input type="text" id="timerInput" class="timer-input" placeholder="mm:ss" value="5:00">
-      <button class="btn btn-ghost btn-sm" id="timerStartBtn">Start</button>
-      <button class="btn btn-ghost btn-sm" id="timerPauseBtn">Pause</button>
-      <button class="btn btn-ghost btn-sm" id="timerResetBtn">Reset</button>
+      <span class="timer-icon">⏱</span>
+      <input type="text" id="timerBox" class="timer-box" value="05:00" placeholder="mm:ss" inputmode="numeric" autocomplete="off" spellcheck="false" title="Click to set the time">
+      <button class="timer-btn" id="timerToggleBtn" title="Start" aria-label="Start timer">▶</button>
+      <button class="timer-btn" id="timerResetBtn" title="Reset" aria-label="Reset timer">↺</button>
     </div>
     <span class="count-pill">Entries <b id="headCount">0</b></span>
     <span class="count-pill" title="Steam trade links captured from chat">Trade links <b id="tradeLinkCount">0</b></span>
@@ -772,8 +782,7 @@
     historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
     chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot'),
     tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg'),
-    timerDisplay:$('timerDisplay'), timerInput:$('timerInput'), timerStartBtn:$('timerStartBtn'),
-    timerPauseBtn:$('timerPauseBtn'), timerResetBtn:$('timerResetBtn'),
+    timerBox:$('timerBox'), timerToggleBtn:$('timerToggleBtn'), timerResetBtn:$('timerResetBtn'),
     soundToggleBtn:$('soundToggleBtn'), tradeLinkCount:$('tradeLinkCount'),
     navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'), invitesMenuItem:$('invitesMenuItem'),
     customizeMenuItem:$('customizeMenuItem'), logoutMenuItem:$('logoutMenuItem'),
@@ -1731,8 +1740,9 @@
 
   /* ---------------- countdown timer (standalone tool — doesn't affect the giveaway) ---------------- */
   let timerRemaining = 300; // seconds
+  let timerTarget = 300;    // last confirmed duration — what Reset reverts to
   let timerInterval = null;
-  let timerPaused = false; // true only when Pause was hit mid-countdown (so Start resumes instead of re-reading the input)
+  let timerPaused = false; // true only when paused mid-countdown (so toggle resumes instead of re-reading the box)
 
   function parseTimerInput(str){
     str = (str || '').trim();
@@ -1756,46 +1766,86 @@
     return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
   }
   function updateTimerDisplay(){
-    els.timerDisplay.textContent = formatTimer(timerRemaining);
+    els.timerBox.value = formatTimer(timerRemaining);
   }
   function stopTimerInterval(){
     if(timerInterval){ clearInterval(timerInterval); timerInterval = null; }
   }
-  els.timerStartBtn.addEventListener('click', ()=>{
-    if(timerInterval) return;
+  function setTimerToggleIcon(running){
+    els.timerToggleBtn.textContent = running ? '⏸' : '▶';
+    els.timerToggleBtn.title = running ? 'Pause' : 'Start';
+    els.timerToggleBtn.setAttribute('aria-label', running ? 'Pause timer' : 'Start timer');
+  }
+  function playTimerDing(){
+    if(!soundEnabled) return;
+    const ctx = getAudioCtx();
+    if(!ctx) return;
+    if(ctx.state === 'suspended') ctx.resume();
+    // Bright two-note chime, A5 -> C#6.
+    [880, 1108.73].forEach((freq, i)=>{
+      const start = ctx.currentTime + i * 0.11;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.55);
+    });
+  }
+  els.timerToggleBtn.addEventListener('click', ()=>{
+    if(timerInterval){
+      // Running -> pause. Box stays readonly and dims gold until resumed or reset.
+      stopTimerInterval();
+      if(timerRemaining > 0){ timerPaused = true; els.timerBox.classList.add('paused'); }
+      setTimerToggleIcon(false);
+      return;
+    }
     if(!timerPaused){
-      const parsed = parseTimerInput(els.timerInput.value);
+      const parsed = parseTimerInput(els.timerBox.value);
       if(parsed === null || parsed <= 0) return;
       timerRemaining = parsed;
+      timerTarget = parsed;
     }
     timerPaused = false;
-    els.timerDisplay.classList.remove('done');
+    els.timerBox.readOnly = true;
+    els.timerBox.classList.remove('done', 'paused');
+    setTimerToggleIcon(true);
     updateTimerDisplay();
     timerInterval = setInterval(()=>{
       timerRemaining -= 1;
       if(timerRemaining <= 0){
         timerRemaining = 0;
         stopTimerInterval();
-        els.timerDisplay.classList.add('done');
+        setTimerToggleIcon(false);
+        els.timerBox.readOnly = false;
+        els.timerBox.classList.add('done');
+        playTimerDing();
       }
       updateTimerDisplay();
     }, 1000);
   });
-  els.timerPauseBtn.addEventListener('click', ()=>{
-    if(timerInterval){
-      stopTimerInterval();
-      if(timerRemaining > 0) timerPaused = true;
-    }
-  });
   els.timerResetBtn.addEventListener('click', ()=>{
+    // Only honor a value typed in the box if it was actually editable (idle/reset) —
+    // while running or paused the box shows a live countdown, not a new target.
+    const wasEditable = !els.timerBox.readOnly;
     stopTimerInterval();
     timerPaused = false;
-    const parsed = parseTimerInput(els.timerInput.value);
-    timerRemaining = (parsed && parsed > 0) ? parsed : 0;
-    els.timerDisplay.classList.remove('done');
+    els.timerBox.readOnly = false;
+    els.timerBox.classList.remove('done', 'paused');
+    setTimerToggleIcon(false);
+    const parsed = wasEditable ? parseTimerInput(els.timerBox.value) : null;
+    timerRemaining = (parsed && parsed > 0) ? parsed : timerTarget;
+    timerTarget = timerRemaining;
     updateTimerDisplay();
   });
-  els.timerInput.addEventListener('keydown', e=>{ if(e.key === 'Enter') els.timerStartBtn.click(); });
+  els.timerBox.addEventListener('focus', ()=>{ if(!els.timerBox.readOnly) els.timerBox.select(); });
+  els.timerBox.addEventListener('keydown', e=>{
+    if(e.key === 'Enter' && !els.timerBox.readOnly){ e.preventDefault(); els.timerBox.blur(); els.timerToggleBtn.click(); }
+  });
   updateTimerDisplay();
 
   /* ---------------- init ---------------- */
