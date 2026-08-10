@@ -102,7 +102,7 @@
 // Config
 // ---------------------------------------------------------------------
 const ALLOWED_ORIGINS = ['https://itzsouthern.github.io'];
-const MAX_ACCOUNTS = 5;
+const MAX_ACCOUNTS = 8;
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const MAX_HISTORY = 100;
 const MAX_BG_BYTES = 5 * 1024 * 1024; // 5MB
