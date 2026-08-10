@@ -108,11 +108,23 @@
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
 
-  /* ---------- viewer-facing keyword badge + quick edit ---------- */
-  .keyword-badge{display:flex;align-items:center;gap:8px;}
-  .keyword-pill{font-family:'General Sans',sans-serif;font-size:13px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--gold);padding:7px 13px;border-radius:999px;}
-  .keyword-pill b{color:var(--gold);font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;font-size:14px;}
-  .keyword-quick-input{width:140px;padding:8px 10px !important;}
+  /* ---------- viewer-facing keyword badge, click-to-edit ---------- */
+  .keyword-pill{font-family:'General Sans',sans-serif;font-size:13px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--gold);padding:7px 13px;border-radius:999px;display:inline-flex;align-items:baseline;gap:5px;}
+  .keyword-pill input[type=text].keyword-inline-input{
+    background:transparent;border:none;outline:none;padding:0 1px;margin:0;
+    color:var(--gold);font-weight:700;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:14px;min-width:20px;width:auto;
+    border-bottom:1px dashed rgba(255,201,77,.45);
+    cursor:text;
+  }
+  .keyword-pill input[type=text].keyword-inline-input:hover{border-bottom-color:rgba(255,201,77,.85);}
+  .keyword-pill input[type=text].keyword-inline-input:focus{border-bottom-style:solid;border-bottom-color:var(--gold);}
+  span.keyword-inline-input{
+    color:var(--gold);font-weight:700;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:14px;
+  }
 
   /* ---------- page nav dropdown ---------- */
   .nav-dropdown{position:relative;}
@@ -498,16 +510,9 @@
   <div class="panel">
     <div class="entries-head">
       <h2 style="margin:0;"><span class="bar"></span>Giveaway reel</h2>
-      <div class="keyword-badge" id="keywordBadgeView">
-        <span class="keyword-pill">Type <b id="keywordDisplayText">!enter</b> to enter</span>
-        <button class="btn btn-ghost btn-sm" id="editKeywordBtn" title="Change the entry keyword">✏️ Edit</button>
-      </div>
-      <div class="keyword-badge" id="keywordBadgeEdit" style="display:none;">
-        <input type="text" id="keywordQuickInput" class="keyword-quick-input" placeholder="!enter">
-        <button class="btn btn-primary btn-sm" id="saveKeywordBtn">Save</button>
-        <button class="btn btn-ghost btn-sm" id="cancelKeywordBtn">✕</button>
-      </div>
+      <span class="keyword-pill">Type <input type="text" id="keywordInlineInput" class="keyword-inline-input" value="!enter" placeholder="!enter" spellcheck="false" autocomplete="off" autocapitalize="off" maxlength="30"> to enter</span>
     </div>
+    <span id="keywordMeasure" class="keyword-inline-input" style="position:fixed;top:-9999px;left:-9999px;visibility:hidden;white-space:pre;"></span>
     <div class="reel-shell">
       <div class="reel-viewport" id="reelViewport">
         <div class="empty-reel" id="emptyReel">Nobody's entered yet. Once your chat drops the keyword, they'll show up here.</div>
@@ -778,8 +783,7 @@
     invitesOverlay:$('invitesOverlay'), invitesCloseBtn:$('invitesCloseBtn'),
     generateInviteBtn:$('generateInviteBtn'), invitesList:$('invitesList'), invitesMsg:$('invitesMsg'),
     brandMain:$('brandMain'), bgImage:$('bgImage'),
-    keywordBadgeView:$('keywordBadgeView'), keywordBadgeEdit:$('keywordBadgeEdit'), keywordDisplayText:$('keywordDisplayText'),
-    editKeywordBtn:$('editKeywordBtn'), keywordQuickInput:$('keywordQuickInput'), saveKeywordBtn:$('saveKeywordBtn'), cancelKeywordBtn:$('cancelKeywordBtn')
+    keywordInlineInput:$('keywordInlineInput'), keywordMeasure:$('keywordMeasure')
   };
 
   function escapeHTML(str){
@@ -1664,39 +1668,31 @@
     if(!channel){ flashConnMsg('Enter a channel name first.', true); return; }
     cfg.channel = channel;
     cfg.keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
-    els.keywordDisplayText.textContent = cfg.keyword;
+    els.keywordInlineInput.value = cfg.keyword;
+    resizeKeywordInput();
     connectToChannel(channel);
   }
   els.connectBtn.addEventListener('click', attemptConnect);
 
-  /* ---------------- quick keyword edit — updates the live filter without touching the chat connection ---------------- */
-  function setKeyword(rawValue){
-    const val = (rawValue.trim() || '!enter').toLowerCase();
+  /* ---------------- click-to-edit keyword badge — updates the live filter without touching the chat connection ---------------- */
+  function resizeKeywordInput(){
+    els.keywordMeasure.textContent = els.keywordInlineInput.value || els.keywordInlineInput.placeholder || '';
+    els.keywordInlineInput.style.width = Math.max(20, els.keywordMeasure.offsetWidth + 4) + 'px';
+  }
+  function commitKeyword(){
+    const val = (els.keywordInlineInput.value.trim() || '!enter').toLowerCase();
     cfg.keyword = val;
     els.keyword.value = val;
-    els.keywordDisplayText.textContent = val;
+    els.keywordInlineInput.value = val;
     try{ localStorage.setItem(STORAGE_KEYS.keyword, val); }catch(err){}
+    resizeKeywordInput();
   }
-  function openKeywordEdit(){
-    els.keywordQuickInput.value = cfg.keyword;
-    els.keywordBadgeView.style.display = 'none';
-    els.keywordBadgeEdit.style.display = 'flex';
-    els.keywordQuickInput.focus();
-    els.keywordQuickInput.select();
-  }
-  function closeKeywordEdit(){
-    els.keywordBadgeEdit.style.display = 'none';
-    els.keywordBadgeView.style.display = 'flex';
-  }
-  els.editKeywordBtn.addEventListener('click', openKeywordEdit);
-  els.cancelKeywordBtn.addEventListener('click', closeKeywordEdit);
-  els.saveKeywordBtn.addEventListener('click', ()=>{
-    setKeyword(els.keywordQuickInput.value);
-    closeKeywordEdit();
-  });
-  els.keywordQuickInput.addEventListener('keydown', e=>{
-    if(e.key === 'Enter'){ setKeyword(els.keywordQuickInput.value); closeKeywordEdit(); }
-    if(e.key === 'Escape') closeKeywordEdit();
+  els.keywordInlineInput.addEventListener('focus', ()=> els.keywordInlineInput.select());
+  els.keywordInlineInput.addEventListener('input', resizeKeywordInput);
+  els.keywordInlineInput.addEventListener('blur', commitKeyword);
+  els.keywordInlineInput.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ e.preventDefault(); els.keywordInlineInput.blur(); }
+    if(e.key === 'Escape'){ els.keywordInlineInput.value = cfg.keyword; resizeKeywordInput(); els.keywordInlineInput.blur(); }
   });
 
   /* ---------------- persisted connection fields + history ---------------- */
@@ -1706,7 +1702,8 @@
       const savedKeyword = localStorage.getItem(STORAGE_KEYS.keyword);
       if(savedChannel) els.channel.value = savedChannel;
       if(savedKeyword){ els.keyword.value = savedKeyword; cfg.keyword = savedKeyword.toLowerCase(); }
-      els.keywordDisplayText.textContent = cfg.keyword;
+      els.keywordInlineInput.value = cfg.keyword;
+      resizeKeywordInput();
       const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
       if(savedHistory) winnerHistory = JSON.parse(savedHistory);
       const savedOverrides = localStorage.getItem(STORAGE_KEYS.tierOverrides);
