@@ -108,6 +108,12 @@
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
 
+  /* ---------- viewer-facing keyword badge + quick edit ---------- */
+  .keyword-badge{display:flex;align-items:center;gap:8px;}
+  .keyword-pill{font-family:'Space Mono',monospace;font-size:13px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--gold);padding:7px 13px;border-radius:999px;}
+  .keyword-pill b{color:var(--gold);}
+  .keyword-quick-input{width:140px;padding:8px 10px !important;}
+
   /* ---------- page nav dropdown ---------- */
   .nav-dropdown{position:relative;}
   .nav-dropdown > .btn{font-size:16px;padding:9px 12px;line-height:1;}
@@ -490,7 +496,18 @@
 
   <!-- 1. REEL — top -->
   <div class="panel">
-    <h2><span class="bar"></span>Giveaway reel</h2>
+    <div class="entries-head">
+      <h2 style="margin:0;"><span class="bar"></span>Giveaway reel</h2>
+      <div class="keyword-badge" id="keywordBadgeView">
+        <span class="keyword-pill">Type <b id="keywordDisplayText">!enter</b> to enter</span>
+        <button class="btn btn-ghost btn-sm" id="editKeywordBtn" title="Change the entry keyword">✏️ Edit</button>
+      </div>
+      <div class="keyword-badge" id="keywordBadgeEdit" style="display:none;">
+        <input type="text" id="keywordQuickInput" class="keyword-quick-input" placeholder="!enter">
+        <button class="btn btn-primary btn-sm" id="saveKeywordBtn">Save</button>
+        <button class="btn btn-ghost btn-sm" id="cancelKeywordBtn">✕</button>
+      </div>
+    </div>
     <div class="reel-shell">
       <div class="reel-viewport" id="reelViewport">
         <div class="empty-reel" id="emptyReel">Nobody's entered yet. Once your chat drops the keyword, they'll show up here.</div>
@@ -760,7 +777,9 @@
     displayNameInput:$('displayNameInput'), bgFileInput:$('bgFileInput'), saveCustomizeBtn:$('saveCustomizeBtn'), customizeMsg:$('customizeMsg'),
     invitesOverlay:$('invitesOverlay'), invitesCloseBtn:$('invitesCloseBtn'),
     generateInviteBtn:$('generateInviteBtn'), invitesList:$('invitesList'), invitesMsg:$('invitesMsg'),
-    brandMain:$('brandMain'), bgImage:$('bgImage')
+    brandMain:$('brandMain'), bgImage:$('bgImage'),
+    keywordBadgeView:$('keywordBadgeView'), keywordBadgeEdit:$('keywordBadgeEdit'), keywordDisplayText:$('keywordDisplayText'),
+    editKeywordBtn:$('editKeywordBtn'), keywordQuickInput:$('keywordQuickInput'), saveKeywordBtn:$('saveKeywordBtn'), cancelKeywordBtn:$('cancelKeywordBtn')
   };
 
   function escapeHTML(str){
@@ -1645,9 +1664,40 @@
     if(!channel){ flashConnMsg('Enter a channel name first.', true); return; }
     cfg.channel = channel;
     cfg.keyword = (els.keyword.value.trim() || '!enter').toLowerCase();
+    els.keywordDisplayText.textContent = cfg.keyword;
     connectToChannel(channel);
   }
   els.connectBtn.addEventListener('click', attemptConnect);
+
+  /* ---------------- quick keyword edit — updates the live filter without touching the chat connection ---------------- */
+  function setKeyword(rawValue){
+    const val = (rawValue.trim() || '!enter').toLowerCase();
+    cfg.keyword = val;
+    els.keyword.value = val;
+    els.keywordDisplayText.textContent = val;
+    try{ localStorage.setItem(STORAGE_KEYS.keyword, val); }catch(err){}
+  }
+  function openKeywordEdit(){
+    els.keywordQuickInput.value = cfg.keyword;
+    els.keywordBadgeView.style.display = 'none';
+    els.keywordBadgeEdit.style.display = 'flex';
+    els.keywordQuickInput.focus();
+    els.keywordQuickInput.select();
+  }
+  function closeKeywordEdit(){
+    els.keywordBadgeEdit.style.display = 'none';
+    els.keywordBadgeView.style.display = 'flex';
+  }
+  els.editKeywordBtn.addEventListener('click', openKeywordEdit);
+  els.cancelKeywordBtn.addEventListener('click', closeKeywordEdit);
+  els.saveKeywordBtn.addEventListener('click', ()=>{
+    setKeyword(els.keywordQuickInput.value);
+    closeKeywordEdit();
+  });
+  els.keywordQuickInput.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ setKeyword(els.keywordQuickInput.value); closeKeywordEdit(); }
+    if(e.key === 'Escape') closeKeywordEdit();
+  });
 
   /* ---------------- persisted connection fields + history ---------------- */
   function loadPersisted(){
@@ -1655,7 +1705,8 @@
       const savedChannel = localStorage.getItem(STORAGE_KEYS.channel);
       const savedKeyword = localStorage.getItem(STORAGE_KEYS.keyword);
       if(savedChannel) els.channel.value = savedChannel;
-      if(savedKeyword) els.keyword.value = savedKeyword;
+      if(savedKeyword){ els.keyword.value = savedKeyword; cfg.keyword = savedKeyword.toLowerCase(); }
+      els.keywordDisplayText.textContent = cfg.keyword;
       const savedHistory = localStorage.getItem(STORAGE_KEYS.history);
       if(savedHistory) winnerHistory = JSON.parse(savedHistory);
       const savedOverrides = localStorage.getItem(STORAGE_KEYS.tierOverrides);
