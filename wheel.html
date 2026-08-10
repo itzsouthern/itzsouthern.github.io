@@ -592,12 +592,17 @@
   });
 
   /* ---------------- wheel drawing ---------------- */
-  function drawWheel(highlightTicketIndex){
+  // ticketsOverride lets a just-finished spin redraw the exact slice layout it
+  // actually spun against, even if entrants were added/removed/cleared while
+  // it was mid-spin (which reshuffles the live wheelTickets array and would
+  // otherwise highlight/land on a different ticket than the one that won).
+  function drawWheel(highlightTicketIndex, ticketsOverride){
+    const tickets = ticketsOverride || wheelTickets;
     const ctx = els.wheelCanvas.getContext('2d');
     const w = els.wheelCanvas.width, h = els.wheelCanvas.height;
     const cx = w/2, cy = h/2, r = Math.min(cx,cy) - 4;
     ctx.clearRect(0,0,w,h);
-    const total = wheelTickets.length;
+    const total = tickets.length;
     if(total === 0){
       ctx.beginPath();
       ctx.arc(cx,cy,r,0,Math.PI*2);
@@ -609,7 +614,7 @@
       return;
     }
     const sliceAngle = (Math.PI*2) / total;
-    wheelTickets.forEach((ticket, i)=>{
+    tickets.forEach((ticket, i)=>{
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
       ctx.beginPath();
@@ -652,8 +657,13 @@
     if(spinning) return;
     const total = wheelTickets.length;
     if(total === 0) return;
+    // Snapshot the exact array this spin is running against — entrants can
+    // still be added/removed while the wheel is animating, which reshuffles
+    // the live wheelTickets, but the winner and the post-spin highlight must
+    // stay locked to whichever layout was actually spun.
+    const spinTickets = wheelTickets;
     const winnerIndex = Math.floor(Math.random() * total);
-    const winner = wheelTickets[winnerIndex];
+    const winner = spinTickets[winnerIndex];
 
     spinning = true;
     showingResult = false;
@@ -682,20 +692,20 @@
       });
     });
 
-    setTimeout(()=> onSpinComplete(winner, winnerIndex), duration*1000 + 60);
+    setTimeout(()=> onSpinComplete(winner, winnerIndex, spinTickets), duration*1000 + 60);
   }
   els.spinBtn.addEventListener('click', spinWheel);
   els.spinDurationRange.addEventListener('input', ()=>{
     els.spinDurVal.textContent = els.spinDurationRange.value + 's';
   });
 
-  function onSpinComplete(winner, winnerIndex){
+  function onSpinComplete(winner, winnerIndex, spinTickets){
     spinning = false;
     showingResult = true;
     els.spinBtn.disabled = false;
     currentWinnerUsername = winner.username;
     currentWinnerTicketIndex = winnerIndex;
-    drawWheel(winnerIndex);
+    drawWheel(winnerIndex, spinTickets);
     const historyEntry = {...winner, at:Date.now()};
     winnerHistory.unshift(historyEntry);
     renderHistory();
