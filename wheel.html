@@ -389,7 +389,10 @@
   let wheelTickets = [];        // one entry per individual ticket, shuffled
   let currentWinnerTicketIndex = null;
 
-  const COLORS = ['#7C3AED','#FF2E9F','#FFC94D','#22E5FF','#3ADE7D','#4B7BFF','#8C4BFF','#E64BC7','#FF4B4B','#ffb627','#2dd4bf','#f472b6'];
+  // 28 evenly-spaced hues so colors don't start repeating until well past a
+  // typical giveaway's entrant count (the old 12-color set repeated after
+  // just 12 people, which got confusing on wheels with 60+ entrants).
+  const COLORS = ['#E25050','#E26F50','#E28F50','#E2AE50','#E2CD50','#D8E250','#B8E250','#99E250','#7AE250','#5AE250','#50E265','#50E284','#50E2A3','#50E2C3','#50E2E2','#50C3E2','#50A3E2','#5084E2','#5065E2','#5A50E2','#7A50E2','#9950E2','#B850E2','#D850E2','#E250CD','#E250AE','#E2508F','#E2506F'];
 
   const API_BASE = 'https://round-fire-71e6.southernzane.workers.dev';
 
