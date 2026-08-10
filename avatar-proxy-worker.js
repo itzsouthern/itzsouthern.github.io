@@ -328,7 +328,7 @@ async function handleMe(request, env) {
     login: row.login,
     displayName: row.display_name || row.twitch_display_name || row.login,
     avatarUrl: row.avatar_url,
-    backgroundImageUrl: row.background_key ? `${origin}/bg/${row.id}` : null,
+    backgroundImageUrl: row.background_key ? `${origin}/bg/${row.id}?v=${encodeURIComponent(row.background_key)}` : null,
     isOwner: !!row.is_owner,
   });
 }
@@ -359,12 +359,18 @@ async function handleUploadBackground(request, env) {
   if (bodyBuf.byteLength === 0) return jsonResponse(request, { error: 'Empty upload' }, 400);
   if (bodyBuf.byteLength > MAX_BG_BYTES) return jsonResponse(request, { error: 'Image too large — 5MB max' }, 400);
 
-  const key = `bg-${sid}`;
+  const previous = await env.DB.prepare('SELECT background_key FROM streamers WHERE id = ?').bind(sid).first();
+
+  const key = `bg-${sid}-${Date.now()}`;
   await env.BACKGROUNDS.put(key, bodyBuf, { httpMetadata: { contentType } });
   await env.DB.prepare('UPDATE streamers SET background_key = ? WHERE id = ?').bind(key, sid).run();
 
+  if (previous && previous.background_key && previous.background_key !== key) {
+    await env.BACKGROUNDS.delete(previous.background_key);
+  }
+
   const origin = new URL(request.url).origin;
-  return jsonResponse(request, { ok: true, backgroundImageUrl: `${origin}/bg/${sid}` });
+  return jsonResponse(request, { ok: true, backgroundImageUrl: `${origin}/bg/${sid}?v=${encodeURIComponent(key)}` });
 }
 
 async function handleServeBackground(request, env, streamerId) {
