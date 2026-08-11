@@ -763,7 +763,12 @@
 
   const TIER_COLORS = ['var(--t0)','var(--t1)','var(--t2)','var(--t3)'];
   const TIER_HEX    = {0:'#4B7BFF',1:'#8C4BFF',2:'#E64BC7',3:'#FF4B4B'};
-  const CARD_W = 142; // 130 width + 12 margin-right, must match CSS
+  // Read from the actual CSS custom properties rather than hardcoding a copy
+  // of them here — a mismatched hardcoded value is exactly what threw the
+  // tick sound (and the winner-landing math) out of sync with the visuals
+  // the last time the card size changed.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const CARD_W = parseFloat(rootStyle.getPropertyValue('--card-w')) + parseFloat(rootStyle.getPropertyValue('--card-gap'));
   const REEL_LENGTH = 56;
   const WINNER_INDEX = 46;
   const IDLE_SCROLL_SPEED = 34; // px/sec, ambient pre-roll scroll
