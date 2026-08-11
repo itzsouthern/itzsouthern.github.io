@@ -492,10 +492,15 @@ async function handleWinners(request, env, url) {
 
   const type = (url.searchParams.get('type') === 'wheel') ? 'wheel' : 'reel';
   const kvKey = `winners_${type}:${sid}`;
+  // Separate from kvKey on purpose — a lifetime total that keeps counting up
+  // even after "Clear history" empties the visible list or MAX_HISTORY trims
+  // old entries off the end.
+  const countKey = `win_count_${type}:${sid}`;
 
   if (request.method === 'GET') {
     const raw = await env.GIVEAWAY_KV.get(kvKey);
-    return jsonResponse(request, { history: raw ? JSON.parse(raw) : [] });
+    const countRaw = await env.GIVEAWAY_KV.get(countKey);
+    return jsonResponse(request, { history: raw ? JSON.parse(raw) : [], totalWins: countRaw ? (parseInt(countRaw, 10) || 0) : 0 });
   }
   if (request.method === 'POST') {
     let winner;
@@ -505,11 +510,15 @@ async function handleWinners(request, env, url) {
     history.unshift(winner);
     const trimmed = history.slice(0, MAX_HISTORY);
     await env.GIVEAWAY_KV.put(kvKey, JSON.stringify(trimmed));
-    return jsonResponse(request, { history: trimmed });
+    const countRaw = await env.GIVEAWAY_KV.get(countKey);
+    const totalWins = (countRaw ? (parseInt(countRaw, 10) || 0) : 0) + 1;
+    await env.GIVEAWAY_KV.put(countKey, String(totalWins));
+    return jsonResponse(request, { history: trimmed, totalWins });
   }
   if (request.method === 'DELETE') {
     await env.GIVEAWAY_KV.put(kvKey, JSON.stringify([]));
-    return jsonResponse(request, { history: [] });
+    const countRaw = await env.GIVEAWAY_KV.get(countKey);
+    return jsonResponse(request, { history: [], totalWins: countRaw ? (parseInt(countRaw, 10) || 0) : 0 });
   }
   return notFound(request);
 }

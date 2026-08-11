@@ -28,7 +28,8 @@
     --t1:#8C4BFF;
     --t2:#E64BC7;
     --t3:#FF4B4B;
-    --card-w:130px;
+    --card-w:165px;
+    --card-h:206px;
     --card-gap:12px;
   }
   *{box-sizing:border-box;}
@@ -289,7 +290,7 @@
   /* ---------- reel ---------- */
   .reel-shell{position:relative;}
   .reel-viewport{
-    position:relative;overflow:hidden;height:184px;
+    position:relative;overflow:hidden;height:230px;
     border-radius:14px;background:
       linear-gradient(180deg, rgba(255,255,255,.03), transparent 30%),
       var(--panel-3);
@@ -312,23 +313,28 @@
   }
   .reel-track{position:absolute;left:0;top:12px;display:flex;will-change:transform;}
   .reel-card{
-    width:var(--card-w);height:160px;flex:0 0 var(--card-w);margin-right:var(--card-gap);
+    width:var(--card-w);height:var(--card-h);flex:0 0 var(--card-w);margin-right:var(--card-gap);
     border-radius:12px;position:relative;overflow:hidden;
     background:linear-gradient(165deg,#20263a,#0d1018);
     border:2px solid var(--tier-color, var(--t0));
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
     box-shadow:0 6px 16px -8px rgba(0,0,0,.7);
   }
   .reel-card.special{box-shadow:0 0 0 3px var(--gold), 0 6px 16px -8px rgba(0,0,0,.7);}
+  .reel-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;background:#0d1018;}
+  .reel-card-shade{
+    position:absolute;left:0;right:0;bottom:0;height:62%;z-index:1;pointer-events:none;
+    background:linear-gradient(0deg, rgba(0,0,0,.88), rgba(0,0,0,.15) 65%, transparent);
+  }
   .reel-card:before{
-    content:"";position:absolute;inset:0;
+    content:"";position:absolute;inset:0;z-index:1;
     background:linear-gradient(160deg, rgba(255,255,255,.14), transparent 40%);
     pointer-events:none;
   }
-  .reel-avatar{width:78px;height:78px;border-radius:50%;object-fit:cover;margin-top:16px;background:#0d1018;border:2px solid rgba(255,255,255,.08);}
-  .reel-name{
-    width:100%;text-align:center;font-family:'Space Mono',monospace;font-size:11px;
-    padding:8px 4px 10px;color:var(--text);background:linear-gradient(0deg, rgba(0,0,0,.55), transparent);
+  .reel-name-badge{
+    position:absolute;left:0;right:0;bottom:11px;z-index:2;
+    padding:0 10px;text-align:center;
+    font-family:'Space Mono',monospace;font-size:12.5px;font-weight:700;color:var(--text);
+    text-shadow:0 1px 4px rgba(0,0,0,.9), 0 0 14px rgba(0,0,0,.6);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .reel-card.winner-slot.hit{animation:hitPulse .9s ease-out;}
@@ -460,7 +466,7 @@
   .legend .swatch{width:8px;height:8px;}
 
   /* history */
-  .history-list{display:flex;gap:8px;flex-wrap:wrap;}
+  .history-list{display:flex;gap:8px;flex-wrap:wrap;max-height:190px;overflow-y:auto;padding-right:4px;align-content:flex-start;}
   .hist-chip{
     display:flex;align-items:center;gap:6px;background:var(--panel-3);border:1px solid var(--line);
     padding:5px 9px 5px 5px;border-radius:999px;font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);
@@ -572,7 +578,10 @@
   <!-- 3. WINNER HISTORY -->
   <div class="panel">
     <div class="entries-head">
-      <h2 style="margin:0;"><span class="bar"></span>Winner history</h2>
+      <div class="left">
+        <h2 style="margin:0;"><span class="bar"></span>Winner history</h2>
+        <span class="count-pill" id="totalWinsPill"><b id="totalWinsCount">0</b> total wins</span>
+      </div>
       <button class="btn btn-ghost btn-sm" id="clearHistoryBtn">Clear history</button>
     </div>
     <div class="history-list" id="historyList"></div>
@@ -731,6 +740,7 @@
   const MAX_CHAT_LINES_SHOWN = 200;
   let chatLineCount = 0;
   let winnerHistory = [];
+  let totalWins = 0;
   let rolling = false;
   let showingResult = false;
   let soundEnabled = true;
@@ -791,7 +801,7 @@
     winTags:$('winTags'), rerollBtn:$('rerollBtn'), excludeRerollBtn:$('excludeRerollBtn'), confettiLayer:$('confettiLayer'),
     winChatName:$('winChatName'), winChatMessages:$('winChatMessages'),
     entriesGrid:$('entriesGrid'), entryCountPill:$('entryCountPill'), clearBtn:$('clearBtn'),
-    historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'),
+    historyList:$('historyList'), clearHistoryBtn:$('clearHistoryBtn'), totalWinsCount:$('totalWinsCount'),
     chatLines:$('chatLines'), chatEmpty:$('chatEmpty'), chatLiveDot:$('chatLiveDot'),
     tierOverrideArea:$('tierOverrideArea'), applyOverridesBtn:$('applyOverridesBtn'), overrideMsg:$('overrideMsg'),
     timerBox:$('timerBox'), timerToggleBtn:$('timerToggleBtn'), timerResetBtn:$('timerResetBtn'),
@@ -1048,11 +1058,16 @@
       return null;
     }
   }
+  function updateTotalWinsDisplay(){
+    if(els.totalWinsCount) els.totalWinsCount.textContent = totalWins;
+  }
   async function loadRemoteWinnersOnInit(){
     const data = await syncFetch('/winners?type=reel');
     if(!data) return;
     winnerHistory = data.history || [];
+    if(typeof data.totalWins === 'number') totalWins = data.totalWins;
     renderHistory();
+    updateTotalWinsDisplay();
   }
 
   function showLoginGate(){
@@ -1352,9 +1367,10 @@
     const color = TIER_HEX[e.tier] || TIER_HEX[0];
     const special = (e.mod || e.vip) ? 'special' : '';
     return `<div class="reel-card ${isSlot?'winner-slot':''} ${special}" style="--tier-color:${color}">
-      <img class="reel-avatar" src="${escapeHTML(e.avatar)}" alt=""
+      <img class="reel-card-img" src="${escapeHTML(e.avatar)}" alt=""
            onerror="this.src='${fallbackAvatar(e.username)}'">
-      <div class="reel-name">${escapeHTML(e.displayName)}</div>
+      <div class="reel-card-shade"></div>
+      <span class="reel-name-badge">${escapeHTML(e.displayName)}</span>
     </div>`;
   }
 
@@ -1432,7 +1448,9 @@
     const historyEntry = {...winner, at:Date.now()};
     winnerHistory.unshift(historyEntry);
     renderHistory();
-    syncFetch('/winners?type=reel', { method:'POST', body: JSON.stringify(historyEntry) });
+    syncFetch('/winners?type=reel', { method:'POST', body: JSON.stringify(historyEntry) }).then(res=>{
+      if(res && typeof res.totalWins === 'number'){ totalWins = res.totalWins; updateTotalWinsDisplay(); }
+    });
     showWinnerPanel(winner, randomDropType());
     spawnConfetti();
   }
