@@ -84,7 +84,8 @@
     position:sticky;top:0;z-index:20;
     gap:16px;flex-wrap:wrap;
   }
-  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand-top{display:flex;align-items:baseline;gap:10px;}
   .brand-main{
     font-family:'General Sans',sans-serif;font-weight:700;font-size:26px;letter-spacing:.5px;
     background:linear-gradient(90deg,#fff, var(--pink) 60%, var(--gold));
@@ -92,25 +93,9 @@
   }
   .brand-sub{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
 
-  /* ---------- editable live-status tagline, next to the brand ---------- */
-  .status-tagline{
-    display:inline-flex;align-items:center;
-    padding:5px 12px;border-radius:999px;
-    background:var(--panel-2);border:1px solid var(--line);
-  }
-  .status-tagline input[type=text].status-tagline-input{
-    background:transparent;border:none;outline:none;margin:0;padding:1px 0;
-    color:var(--text-dim);font-family:'General Sans',sans-serif;font-size:12px;font-weight:500;
-    width:auto;min-width:20px;
-    border-bottom:1px dashed rgba(255,255,255,.25);cursor:text;
-  }
-  .status-tagline input[type=text].status-tagline-input:hover{border-bottom-color:rgba(255,255,255,.5);}
-  .status-tagline input[type=text].status-tagline-input:focus{border-bottom-style:solid;border-bottom-color:var(--cyan);color:var(--text);}
-  .status-tagline input[type=text].status-tagline-input::placeholder{color:#525a70;}
-  .status-tagline input[type=text].status-tagline-input.save-error{border-bottom-style:solid;border-bottom-color:var(--red);}
-  span.status-tagline-input{
-    color:var(--text-dim);font-family:'General Sans',sans-serif;font-size:12px;font-weight:500;
-  }
+  /* ---------- live-status tagline, shown under the brand — set from Customize ---------- */
+  .tagline-text{font-family:'General Sans',sans-serif;font-size:12px;color:var(--text-dim);font-weight:500;}
+  .tagline-text:empty{display:none;}
 
   .status-cluster{display:flex;align-items:center;gap:10px;}
   .pill{
@@ -506,13 +491,12 @@
 
 <header>
   <div class="brand">
-    <span class="brand-main" id="brandMain">SOUTHYY</span>
-    <span class="brand-sub">Giveaways</span>
-    <span class="status-tagline">
-      <input type="text" id="taglineInput" class="status-tagline-input" placeholder="Add a live status…" maxlength="100" spellcheck="false" autocomplete="off" title="Click to set your status">
-    </span>
+    <div class="brand-top">
+      <span class="brand-main" id="brandMain">SOUTHYY</span>
+      <span class="brand-sub">Giveaways</span>
+    </div>
+    <span class="tagline-text" id="taglineText"></span>
   </div>
-  <span id="taglineMeasure" class="status-tagline-input" style="position:fixed;top:-9999px;left:-9999px;visibility:hidden;white-space:pre;"></span>
   <div class="status-cluster">
     <div class="timer-widget" id="timerWidget">
       <span class="timer-icon">⏱</span>
@@ -711,6 +695,9 @@
     <label class="field" for="displayNameInput">Display name <span style="color:#525a70">(shown as "[name] Giveaways")</span></label>
     <input type="text" id="displayNameInput" placeholder="Your name" maxlength="40">
 
+    <label class="field" for="taglineModalInput">Live status <span style="color:#525a70">(optional — shown under your name, e.g. "live @itzsouthern on twitch")</span></label>
+    <input type="text" id="taglineModalInput" placeholder="Add a status…" maxlength="100">
+
     <label class="field" for="bgFileInput">Background image <span style="color:#525a70">(optional — JPG/PNG/WEBP, 5MB max)</span></label>
     <input type="file" id="bgFileInput" accept="image/jpeg,image/png,image/webp">
 
@@ -818,7 +805,7 @@
     generateInviteBtn:$('generateInviteBtn'), invitesList:$('invitesList'), invitesMsg:$('invitesMsg'),
     brandMain:$('brandMain'), bgImage:$('bgImage'),
     keywordInlineInput:$('keywordInlineInput'), keywordMeasure:$('keywordMeasure'),
-    taglineInput:$('taglineInput'), taglineMeasure:$('taglineMeasure')
+    taglineText:$('taglineText'), taglineModalInput:$('taglineModalInput')
   };
 
   function escapeHTML(str){
@@ -944,6 +931,11 @@
       if(name){
         const res = await syncFetch('/me/settings', { method:'POST', body: JSON.stringify({ displayName: name }) });
         if(!res || res.error) throw new Error(res && res.error || 'Could not save display name');
+      }
+      const tagline = els.taglineModalInput.value.trim();
+      if(tagline !== ((me && me.tagline) || '')){
+        const res = await syncFetch('/me/settings', { method:'POST', body: JSON.stringify({ tagline }) });
+        if(!res || res.error) throw new Error(res && res.error || 'Could not save your status');
       }
       const file = els.bgFileInput.files[0];
       if(file){
@@ -1079,10 +1071,8 @@
     if(els.invitesMenuItem) els.invitesMenuItem.style.display = me.isOwner ? '' : 'none';
     if(els.displayNameInput) els.displayNameInput.value = me.displayName;
     if(els.channel && !els.channel.value.trim()) els.channel.value = me.login;
-    if(els.taglineInput){
-      els.taglineInput.value = me.tagline || '';
-      resizeTaglineInput();
-    }
+    if(els.taglineText) els.taglineText.textContent = me.tagline || '';
+    if(els.taglineModalInput) els.taglineModalInput.value = me.tagline || '';
   }
   const AUTH_ERROR_MESSAGES = {
     invite_required: "This is invite-only right now — you'll need an invite link from the site owner.",
@@ -1733,33 +1723,6 @@
     if(e.key === 'Enter'){ e.preventDefault(); els.keywordInlineInput.blur(); }
     if(e.key === 'Escape'){ els.keywordInlineInput.value = cfg.keyword; resizeKeywordInput(); els.keywordInlineInput.blur(); }
   });
-
-  /* ---------------- click-to-edit live-status tagline — synced to the streamer's account, shown on every page ---------------- */
-  function resizeTaglineInput(){
-    els.taglineMeasure.textContent = els.taglineInput.value || els.taglineInput.placeholder || '';
-    els.taglineInput.style.width = Math.max(20, els.taglineMeasure.offsetWidth + 4) + 'px';
-  }
-  async function commitTagline(){
-    const val = els.taglineInput.value.trim().slice(0, 100);
-    els.taglineInput.value = val;
-    resizeTaglineInput();
-    if(!me || val === (me.tagline || '')) return;
-    const res = await syncFetch('/me/settings', { method:'POST', body: JSON.stringify({ tagline: val }) });
-    if(res && !res.error){
-      me.tagline = val;
-    }else{
-      els.taglineInput.classList.add('save-error');
-      setTimeout(()=> els.taglineInput.classList.remove('save-error'), 2000);
-    }
-  }
-  els.taglineInput.addEventListener('focus', ()=> els.taglineInput.select());
-  els.taglineInput.addEventListener('input', resizeTaglineInput);
-  els.taglineInput.addEventListener('blur', commitTagline);
-  els.taglineInput.addEventListener('keydown', e=>{
-    if(e.key === 'Enter'){ e.preventDefault(); els.taglineInput.blur(); }
-    if(e.key === 'Escape'){ els.taglineInput.value = (me && me.tagline) || ''; resizeTaglineInput(); els.taglineInput.blur(); }
-  });
-  resizeTaglineInput();
 
   /* ---------------- persisted connection fields + history ---------------- */
   function loadPersisted(){

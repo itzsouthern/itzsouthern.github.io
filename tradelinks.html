@@ -74,19 +74,16 @@
     position:sticky;top:0;z-index:20;
     gap:16px;flex-wrap:wrap;
   }
-  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand-top{display:flex;align-items:baseline;gap:10px;}
   .brand-main{
     font-family:'General Sans',sans-serif;font-weight:700;font-size:26px;letter-spacing:.5px;
     background:linear-gradient(90deg,#fff, var(--pink) 60%, var(--gold));
     -webkit-background-clip:text;background-clip:text;color:transparent;
   }
   .brand-sub{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
-  .status-tagline{
-    display:inline-flex;align-items:center;
-    padding:5px 12px;border-radius:999px;
-    background:var(--panel-2);border:1px solid var(--line);
-    color:var(--text-dim);font-family:'General Sans',sans-serif;font-size:12px;font-weight:500;
-  }
+  .tagline-text{font-family:'General Sans',sans-serif;font-size:12px;color:var(--text-dim);font-weight:500;}
+  .tagline-text:empty{display:none;}
   .status-cluster{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .count-pill{font-family:'Space Mono',monospace;font-size:12px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;}
   .count-pill b{color:var(--text);}
@@ -217,9 +214,11 @@
 
 <header>
   <div class="brand">
-    <span class="brand-main" id="brandMain">SOUTHYY</span>
-    <span class="brand-sub">Trade Links</span>
-    <span class="status-tagline" id="taglinePill" style="display:none;"><span id="taglineText"></span></span>
+    <div class="brand-top">
+      <span class="brand-main" id="brandMain">SOUTHYY</span>
+      <span class="brand-sub">Trade Links</span>
+    </div>
+    <span class="tagline-text" id="taglineText"></span>
   </div>
   <div class="status-cluster">
     <span class="count-pill"><b id="countPill">0</b> saved</span>
@@ -297,7 +296,7 @@
     manualName:$('manualName'), manualLink:$('manualLink'), manualAddBtn:$('manualAddBtn'), manualMsg:$('manualMsg'),
     syncStatus:$('syncStatus'), navMenuBtn:$('navMenuBtn'), navMenu:$('navMenu'), logoutMenuItem:$('logoutMenuItem'),
     loginOverlay:$('loginOverlay'), loginErrorMsg:$('loginErrorMsg'), signInBtn:$('signInBtn'),
-    brandMain:$('brandMain'), bgImage:$('bgImage'), taglinePill:$('taglinePill'), taglineText:$('taglineText')
+    brandMain:$('brandMain'), bgImage:$('bgImage'), taglineText:$('taglineText')
   };
 
   function escapeHTML(str){
@@ -323,10 +322,7 @@
     if(me.backgroundImageUrl && els.bgImage){
       els.bgImage.style.backgroundImage = `url('${me.backgroundImageUrl}')`;
     }
-    if(els.taglinePill && els.taglineText){
-      if(me.tagline){ els.taglineText.textContent = me.tagline; els.taglinePill.style.display = ''; }
-      else{ els.taglinePill.style.display = 'none'; }
-    }
+    if(els.taglineText) els.taglineText.textContent = me.tagline || '';
   }
   const AUTH_ERROR_MESSAGES = {
     invite_required: "This is invite-only right now — you'll need an invite link from the site owner.",
