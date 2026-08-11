@@ -43,6 +43,7 @@
  *           display_name TEXT,
  *           avatar_url TEXT,
  *           background_key TEXT,
+ *           tagline TEXT,
  *           is_owner INTEGER NOT NULL DEFAULT 0,
  *           created_at INTEGER NOT NULL
  *         );
@@ -96,6 +97,14 @@
  *
  *     Safe to run more than once — it only fills in keys that are still
  *     empty, never overwrites data you've already collected since signing in.
+ *
+ *  8. Schema update (only needed if you deployed before the tagline field
+ *     existed): your D1 database -> Console tab -> run once:
+ *
+ *       ALTER TABLE streamers ADD COLUMN tagline TEXT;
+ *
+ *     A fresh deployment following step 2 above already includes this
+ *     column, so this step only applies to upgrading an existing database.
  */
 
 // ---------------------------------------------------------------------
@@ -329,20 +338,44 @@ async function handleMe(request, env) {
     displayName: row.display_name || row.twitch_display_name || row.login,
     avatarUrl: row.avatar_url,
     backgroundImageUrl: row.background_key ? `${origin}/bg/${row.id}?v=${encodeURIComponent(row.background_key)}` : null,
+    tagline: row.tagline || '',
     isOwner: !!row.is_owner,
   });
 }
 
+// Accepts a partial update — only the fields actually present in the body
+// get validated and written, so the header's quick tagline edit doesn't
+// need to resend displayName, and the Customize modal doesn't need to
+// resend tagline.
 async function handleUpdateSettings(request, env) {
   if (!env.DB) return jsonResponse(request, { error: 'server misconfigured' }, 500);
   const sid = await getAuthedStreamerId(request, env);
   if (!sid) return jsonResponse(request, { error: 'unauthorized' }, 401);
   let body;
   try { body = await request.json(); } catch (err) { return jsonResponse(request, { error: 'invalid JSON body' }, 400); }
-  const displayName = (body.displayName || '').toString().trim().slice(0, 40);
-  if (!displayName) return jsonResponse(request, { error: 'displayName is required' }, 400);
-  await env.DB.prepare('UPDATE streamers SET display_name = ? WHERE id = ?').bind(displayName, sid).run();
-  return jsonResponse(request, { ok: true, displayName });
+
+  const setClauses = [];
+  const bindValues = [];
+  const result = {};
+
+  if (body.displayName !== undefined) {
+    const displayName = (body.displayName || '').toString().trim().slice(0, 40);
+    if (!displayName) return jsonResponse(request, { error: 'displayName cannot be empty' }, 400);
+    setClauses.push('display_name = ?');
+    bindValues.push(displayName);
+    result.displayName = displayName;
+  }
+  if (body.tagline !== undefined) {
+    const tagline = (body.tagline || '').toString().trim().slice(0, 100);
+    setClauses.push('tagline = ?');
+    bindValues.push(tagline);
+    result.tagline = tagline;
+  }
+  if (setClauses.length === 0) return jsonResponse(request, { error: 'nothing to update' }, 400);
+
+  bindValues.push(sid);
+  await env.DB.prepare(`UPDATE streamers SET ${setClauses.join(', ')} WHERE id = ?`).bind(...bindValues).run();
+  return jsonResponse(request, { ok: true, ...result });
 }
 
 async function handleUploadBackground(request, env) {
