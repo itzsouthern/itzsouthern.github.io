@@ -685,6 +685,14 @@
     const winnerIndex = Math.floor(Math.random() * total);
     const winner = spinTickets[winnerIndex];
 
+    // If entrants were added/removed while the previous winner popup was
+    // still showing, renderEntries() deliberately held off redrawing the
+    // canvas (so the result stayed visible) but still rebuilt wheelTickets
+    // in the background — so the canvas can be showing a stale, out-of-date
+    // layout right up until this spin starts. Force a fresh draw now so the
+    // wheel that's about to spin actually reflects who can currently win.
+    drawWheel(undefined, spinTickets);
+
     spinning = true;
     showingResult = false;
     els.spinBtn.disabled = true;
