@@ -729,12 +729,18 @@
     els.wheelWrap.style.transform = 'rotate(0deg)';
     void els.wheelWrap.offsetWidth;
 
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        els.wheelWrap.style.transition = `transform ${duration}s cubic-bezier(0.12,0.65,0.15,1)`;
-        els.wheelWrap.style.transform = `rotate(${finalRotation}deg)`;
-      });
-    });
+    // setTimeout, not requestAnimationFrame, on purpose: browsers pause/throttle
+    // rAF for tabs that aren't visible (backgrounded, minimized, or many OBS
+    // Browser Source setups), which would leave the wheel visually frozen
+    // forever while the winner-selection setTimeout below kept firing on
+    // schedule regardless. The synchronous offsetWidth read above already
+    // forces the "reset to 0" state to commit; this just needs a moment before
+    // switching to the animated target, and setTimeout keeps firing even when
+    // backgrounded.
+    setTimeout(()=>{
+      els.wheelWrap.style.transition = `transform ${duration}s cubic-bezier(0.12,0.65,0.15,1)`;
+      els.wheelWrap.style.transform = `rotate(${finalRotation}deg)`;
+    }, 20);
 
     setTimeout(()=> onSpinComplete(winner, winnerIndex, spinTickets), duration*1000 + 60);
   }

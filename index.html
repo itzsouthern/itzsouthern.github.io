@@ -1410,12 +1410,17 @@
     const jitter = Math.random()*60 - 30;
     const target = -(WINNER_INDEX*CARD_W + CARD_W/2 - viewportW/2) + jitter;
 
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        els.reelTrack.style.transition = `transform ${durationSec}s cubic-bezier(0.10,0.62,0.12,1)`;
-        els.reelTrack.style.transform = `translateX(${target}px)`;
-      });
-    });
+    // setTimeout, not requestAnimationFrame, on purpose: browsers pause/throttle
+    // rAF for tabs that aren't visible (backgrounded, minimized, or many OBS
+    // Browser Source setups), which left the reel visually frozen forever while
+    // the winner-selection setTimeout below kept firing on schedule regardless.
+    // The synchronous offsetWidth read above already forces the "reset to 0"
+    // state to commit; this just needs a moment before switching to the
+    // animated target, and setTimeout keeps firing even when backgrounded.
+    setTimeout(()=>{
+      els.reelTrack.style.transition = `transform ${durationSec}s cubic-bezier(0.10,0.62,0.12,1)`;
+      els.reelTrack.style.transform = `translateX(${target}px)`;
+    }, 20);
 
     setTimeout(()=> onRollComplete(winner), durationSec*1000 + 60);
   }
