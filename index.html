@@ -781,7 +781,7 @@
   // sessionStorage (not localStorage) on purpose: survives page refreshes but
   // clears when the browser/tab is actually closed, so a refresh stays
   // connected without re-clicking Connect, while closing out requires it again.
-  const SESSION_KEYS = { wasConnected:'southyy_wasConnected' };
+  const SESSION_KEYS = { wasConnected:'southyy_wasConnected', liveEntries:'southyy_liveEntries' };
 
   let me = null; // the signed-in streamer's profile, set once /me resolves
 
@@ -1313,6 +1313,27 @@
     els.headCount.textContent = count;
     els.entryCountPill.innerHTML = `<b>${active}</b> in the pool${count!==active ? ` · ${count-active} excluded` : ''}`;
     renderIdleReel();
+    persistLiveEntries();
+  }
+
+  // Entries live only in memory, so navigating to another page (a real
+  // browser navigation, not client-side routing) used to wipe out everyone
+  // who'd already typed the keyword. Mirrored to sessionStorage on every
+  // change and restored on load so it survives going to Trade Links/Wheel
+  // and back, while still starting fresh once the tab is actually closed.
+  function persistLiveEntries(){
+    try{ sessionStorage.setItem(SESSION_KEYS.liveEntries, JSON.stringify([...entries.values()])); }catch(err){}
+  }
+  function loadPersistedLiveEntries(){
+    try{
+      const saved = sessionStorage.getItem(SESSION_KEYS.liveEntries);
+      if(!saved) return;
+      JSON.parse(saved).forEach(e=>{
+        if(e && e.username) entries.set(e.username, e);
+      });
+    }catch(err){
+      console.warn('Could not restore in-progress entries:', err);
+    }
   }
 
   function renderIdleReel(){
@@ -1894,6 +1915,7 @@
 
   /* ---------------- init ---------------- */
   loadPersisted();
+  loadPersistedLiveEntries();
   renderEntries();
   renderHistory();
   try{
